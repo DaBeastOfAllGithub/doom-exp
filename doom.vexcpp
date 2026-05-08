@@ -7,12 +7,27 @@ extern "C" {
 #include <stdlib.h>
 #include <stdio.h>
 #include <math.h>
+#include <ctype.h>
+#include <limits.h>
+#include <stdarg.h>
+#include <errno.h>
+#include <sys/stat.h>
+
 #define TICRATE 35
 #define SCREENWIDTH 320
 #define SCREENHEIGHT 200
 #define MAXPLAYERS 4
 #define NUMPSPRITES 2
 #define MAX_DM_STARTS 10
+
+// Make void* casts implicit for C compatibility
+#define Z_Malloc(s,t,p) malloc(s)
+#define Z_Realloc(p,s,t,u) realloc(p,s)
+#define Z_Calloc(s,n,t,p) calloc(n,s)
+#define Z_Free(p) free(p)
+#define Z_ChangeTag(p,t) ((void)(p))
+#define Z_ChangeTag2(p,t,f,l) ((void)(p))
+
 // --- doomtype.h ---
 //
 // Copyright(C) 1993-1996 Id Software, Inc.
@@ -766,6 +781,456 @@ typedef struct thinker_s
     think_t		function;
     
 } thinker_t;
+
+
+
+#endif
+
+// --- r_defs.h ---
+//
+// Copyright(C) 1993-1996 Id Software, Inc.
+// Copyright(C) 2005-2014 Simon Howard
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// DESCRIPTION:
+//      Refresh/rendering module, shared data struct definitions.
+//
+
+
+#ifndef __R_DEFS__
+#define __R_DEFS__
+
+
+// Screenwidth.
+// include stripped
+
+// Some more or less basic data types
+// we depend on.
+// include stripped
+
+// We rely on the thinker data struct
+// to handle sound origins in sectors.
+// include stripped
+// SECTORS do store MObjs anyway.
+// include stripped
+
+// include stripped
+
+// include stripped
+
+
+
+
+// Silhouette, needed for clipping Segs (mainly)
+// and sprites representing things.
+#define SIL_NONE		0
+#define SIL_BOTTOM		1
+#define SIL_TOP			2
+#define SIL_BOTH		3
+
+#define MAXDRAWSEGS		256
+
+
+
+
+
+//
+// INTERNAL MAP TYPES
+//  used by play and refresh
+//
+
+//
+// Your plain vanilla vertex.
+// Note: transformed values not buffered locally,
+//  like some DOOM-alikes ("wt", "WebView") did.
+//
+typedef struct
+{
+    fixed_t	x;
+    fixed_t	y;
+    
+} vertex_t;
+
+
+// Forward of LineDefs, for Sectors.
+struct line_s;
+
+// Each sector has a degenmobj_t in its center
+//  for sound origin purposes.
+// I suppose this does not handle sound from
+//  moving objects (doppler), because
+//  position is prolly just buffered, not
+//  updated.
+typedef struct
+{
+    thinker_t		thinker;	// not used for anything
+    fixed_t		x;
+    fixed_t		y;
+    fixed_t		z;
+
+} degenmobj_t;
+
+//
+// The SECTORS record, at runtime.
+// Stores things/mobjs.
+//
+typedef	struct
+{
+    fixed_t	floorheight;
+    fixed_t	ceilingheight;
+    short	floorpic;
+    short	ceilingpic;
+    short	lightlevel;
+    short	special;
+    short	tag;
+
+    // 0 = untraversed, 1,2 = sndlines -1
+    int		soundtraversed;
+
+    // thing that made a sound (or null)
+    mobj_t*	soundtarget;
+
+    // mapblock bounding box for height changes
+    int		blockbox[4];
+
+    // origin for any sounds played by the sector
+    degenmobj_t	soundorg;
+
+    // if == validcount, already checked
+    int		validcount;
+
+    // list of mobjs in sector
+    mobj_t*	thinglist;
+
+    // thinker_t for reversable actions
+    void*	specialdata;
+
+    int			linecount;
+    struct line_s**	lines;	// [linecount] size
+    
+} sector_t;
+
+
+
+
+//
+// The SideDef.
+//
+
+typedef struct
+{
+    // add this to the calculated texture column
+    fixed_t	textureoffset;
+    
+    // add this to the calculated texture top
+    fixed_t	rowoffset;
+
+    // Texture indices.
+    // We do not maintain names here. 
+    short	toptexture;
+    short	bottomtexture;
+    short	midtexture;
+
+    // Sector the SideDef is facing.
+    sector_t*	sector;
+    
+} side_t;
+
+
+
+//
+// Move clipping aid for LineDefs.
+//
+typedef enum
+{
+    ST_HORIZONTAL,
+    ST_VERTICAL,
+    ST_POSITIVE,
+    ST_NEGATIVE
+
+} slopetype_t;
+
+
+
+typedef struct line_s
+{
+    // Vertices, from v1 to v2.
+    vertex_t*	v1;
+    vertex_t*	v2;
+
+    // Precalculated v2 - v1 for side checking.
+    fixed_t	dx;
+    fixed_t	dy;
+
+    // Animation related.
+    short	flags;
+    short	special;
+    short	tag;
+
+    // Visual appearance: SideDefs.
+    //  sidenum[1] will be -1 if one sided
+    short	sidenum[2];			
+
+    // Neat. Another bounding box, for the extent
+    //  of the LineDef.
+    fixed_t	bbox[4];
+
+    // To aid move clipping.
+    slopetype_t	slopetype;
+
+    // Front and back sector.
+    // Note: redundant? Can be retrieved from SideDefs.
+    sector_t*	frontsector;
+    sector_t*	backsector;
+
+    // if == validcount, already checked
+    int		validcount;
+
+    // thinker_t for reversable actions
+    void*	specialdata;		
+} line_t;
+
+
+
+
+//
+// A SubSector.
+// References a Sector.
+// Basically, this is a list of LineSegs,
+//  indicating the visible walls that define
+//  (all or some) sides of a convex BSP leaf.
+//
+typedef struct subsector_s
+{
+    sector_t*	sector;
+    short	numlines;
+    short	firstline;
+    
+} subsector_t;
+
+
+
+//
+// The LineSeg.
+//
+typedef struct
+{
+    vertex_t*	v1;
+    vertex_t*	v2;
+    
+    fixed_t	offset;
+
+    angle_t	angle;
+
+    side_t*	sidedef;
+    line_t*	linedef;
+
+    // Sector references.
+    // Could be retrieved from linedef, too.
+    // backsector is NULL for one sided lines
+    sector_t*	frontsector;
+    sector_t*	backsector;
+    
+} seg_t;
+
+
+
+//
+// BSP node.
+//
+typedef struct
+{
+    // Partition line.
+    fixed_t	x;
+    fixed_t	y;
+    fixed_t	dx;
+    fixed_t	dy;
+
+    // Bounding box for each child.
+    fixed_t	bbox[2][4];
+
+    // If NF_SUBSECTOR its a subsector.
+    unsigned short children[2];
+    
+} node_t;
+
+
+
+
+// PC direct to screen pointers
+//B UNUSED - keep till detailshift in r_draw.c resolved
+//extern byte*	destview;
+//extern byte*	destscreen;
+
+
+
+
+
+//
+// OTHER TYPES
+//
+
+// This could be wider for >8 bit display.
+// Indeed, true color support is posibble
+//  precalculating 24bpp lightmap/colormap LUT.
+//  from darkening PLAYPAL to all black.
+// Could even us emore than 32 levels.
+typedef byte	lighttable_t;	
+
+
+
+
+//
+// ?
+//
+typedef struct drawseg_s
+{
+    seg_t*		curline;
+    int			x1;
+    int			x2;
+
+    fixed_t		scale1;
+    fixed_t		scale2;
+    fixed_t		scalestep;
+
+    // 0=none, 1=bottom, 2=top, 3=both
+    int			silhouette;
+
+    // do not clip sprites above this
+    fixed_t		bsilheight;
+
+    // do not clip sprites below this
+    fixed_t		tsilheight;
+    
+    // Pointers to lists for sprite clipping,
+    //  all three adjusted so [x1] is first value.
+    short*		sprtopclip;		
+    short*		sprbottomclip;	
+    short*		maskedtexturecol;
+    
+} drawseg_t;
+
+
+
+// A vissprite_t is a thing
+//  that will be drawn during a refresh.
+// I.e. a sprite object that is partly visible.
+typedef struct vissprite_s
+{
+    // Doubly linked list.
+    struct vissprite_s*	prev;
+    struct vissprite_s*	next;
+    
+    int			x1;
+    int			x2;
+
+    // for line side calculation
+    fixed_t		gx;
+    fixed_t		gy;		
+
+    // global bottom / top for silhouette clipping
+    fixed_t		gz;
+    fixed_t		gzt;
+
+    // horizontal position of x1
+    fixed_t		startfrac;
+    
+    fixed_t		scale;
+    
+    // negative if flipped
+    fixed_t		xiscale;	
+
+    fixed_t		texturemid;
+    int			patch;
+
+    // for color translation and shadow draw,
+    //  maxbright frames as well
+    lighttable_t*	colormap;
+   
+    int			mobjflags;
+    
+} vissprite_t;
+
+
+//	
+// Sprites are patches with a special naming convention
+//  so they can be recognized by R_InitSprites.
+// The base name is NNNNFx or NNNNFxFx, with
+//  x indicating the rotation, x = 0, 1-7.
+// The sprite and frame specified by a thing_t
+//  is range checked at run time.
+// A sprite is a patch_t that is assumed to represent
+//  a three dimensional object and may have multiple
+//  rotations pre drawn.
+// Horizontal flipping is used to save space,
+//  thus NNNNF2F5 defines a mirrored patch.
+// Some sprites will only have one picture used
+// for all views: NNNNF0
+//
+typedef struct
+{
+    // If false use 0 for any position.
+    // Note: as eight entries are available,
+    //  we might as well insert the same name eight times.
+    boolean	rotate;
+
+    // Lump to use for view angles 0-7.
+    short	lump[8];
+
+    // Flip bit (1 = flip) to use for view angles 0-7.
+    byte	flip[8];
+    
+} spriteframe_t;
+
+
+
+//
+// A sprite definition:
+//  a number of animation frames.
+//
+typedef struct
+{
+    int			numframes;
+    spriteframe_t*	spriteframes;
+
+} spritedef_t;
+
+
+
+//
+// Now what is a visplane, anyway?
+// 
+typedef struct
+{
+  fixed_t		height;
+  int			picnum;
+  int			lightlevel;
+  int			minx;
+  int			maxx;
+  
+  // leave pads for [minx-1]/[maxx+1]
+  
+  byte		pad1;
+  // Here lies the rub for all
+  //  dynamic resize/change of resolution.
+  byte		top[SCREENWIDTH];
+  byte		pad2;
+  byte		pad3;
+  // See above.
+  byte		bottom[SCREENWIDTH];
+  byte		pad4;
+
+} visplane_t;
+
 
 
 
@@ -3864,456 +4329,6 @@ unsigned int Z_ZoneSize(void);
 
 #endif
 
-// --- r_defs.h ---
-//
-// Copyright(C) 1993-1996 Id Software, Inc.
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//      Refresh/rendering module, shared data struct definitions.
-//
-
-
-#ifndef __R_DEFS__
-#define __R_DEFS__
-
-
-// Screenwidth.
-// include stripped
-
-// Some more or less basic data types
-// we depend on.
-// include stripped
-
-// We rely on the thinker data struct
-// to handle sound origins in sectors.
-// include stripped
-// SECTORS do store MObjs anyway.
-// include stripped
-
-// include stripped
-
-// include stripped
-
-
-
-
-// Silhouette, needed for clipping Segs (mainly)
-// and sprites representing things.
-#define SIL_NONE		0
-#define SIL_BOTTOM		1
-#define SIL_TOP			2
-#define SIL_BOTH		3
-
-#define MAXDRAWSEGS		256
-
-
-
-
-
-//
-// INTERNAL MAP TYPES
-//  used by play and refresh
-//
-
-//
-// Your plain vanilla vertex.
-// Note: transformed values not buffered locally,
-//  like some DOOM-alikes ("wt", "WebView") did.
-//
-typedef struct
-{
-    fixed_t	x;
-    fixed_t	y;
-    
-} vertex_t;
-
-
-// Forward of LineDefs, for Sectors.
-struct line_s;
-
-// Each sector has a degenmobj_t in its center
-//  for sound origin purposes.
-// I suppose this does not handle sound from
-//  moving objects (doppler), because
-//  position is prolly just buffered, not
-//  updated.
-typedef struct
-{
-    thinker_t		thinker;	// not used for anything
-    fixed_t		x;
-    fixed_t		y;
-    fixed_t		z;
-
-} degenmobj_t;
-
-//
-// The SECTORS record, at runtime.
-// Stores things/mobjs.
-//
-typedef	struct
-{
-    fixed_t	floorheight;
-    fixed_t	ceilingheight;
-    short	floorpic;
-    short	ceilingpic;
-    short	lightlevel;
-    short	special;
-    short	tag;
-
-    // 0 = untraversed, 1,2 = sndlines -1
-    int		soundtraversed;
-
-    // thing that made a sound (or null)
-    mobj_t*	soundtarget;
-
-    // mapblock bounding box for height changes
-    int		blockbox[4];
-
-    // origin for any sounds played by the sector
-    degenmobj_t	soundorg;
-
-    // if == validcount, already checked
-    int		validcount;
-
-    // list of mobjs in sector
-    mobj_t*	thinglist;
-
-    // thinker_t for reversable actions
-    void*	specialdata;
-
-    int			linecount;
-    struct line_s**	lines;	// [linecount] size
-    
-} sector_t;
-
-
-
-
-//
-// The SideDef.
-//
-
-typedef struct
-{
-    // add this to the calculated texture column
-    fixed_t	textureoffset;
-    
-    // add this to the calculated texture top
-    fixed_t	rowoffset;
-
-    // Texture indices.
-    // We do not maintain names here. 
-    short	toptexture;
-    short	bottomtexture;
-    short	midtexture;
-
-    // Sector the SideDef is facing.
-    sector_t*	sector;
-    
-} side_t;
-
-
-
-//
-// Move clipping aid for LineDefs.
-//
-typedef enum
-{
-    ST_HORIZONTAL,
-    ST_VERTICAL,
-    ST_POSITIVE,
-    ST_NEGATIVE
-
-} slopetype_t;
-
-
-
-typedef struct line_s
-{
-    // Vertices, from v1 to v2.
-    vertex_t*	v1;
-    vertex_t*	v2;
-
-    // Precalculated v2 - v1 for side checking.
-    fixed_t	dx;
-    fixed_t	dy;
-
-    // Animation related.
-    short	flags;
-    short	special;
-    short	tag;
-
-    // Visual appearance: SideDefs.
-    //  sidenum[1] will be -1 if one sided
-    short	sidenum[2];			
-
-    // Neat. Another bounding box, for the extent
-    //  of the LineDef.
-    fixed_t	bbox[4];
-
-    // To aid move clipping.
-    slopetype_t	slopetype;
-
-    // Front and back sector.
-    // Note: redundant? Can be retrieved from SideDefs.
-    sector_t*	frontsector;
-    sector_t*	backsector;
-
-    // if == validcount, already checked
-    int		validcount;
-
-    // thinker_t for reversable actions
-    void*	specialdata;		
-} line_t;
-
-
-
-
-//
-// A SubSector.
-// References a Sector.
-// Basically, this is a list of LineSegs,
-//  indicating the visible walls that define
-//  (all or some) sides of a convex BSP leaf.
-//
-typedef struct subsector_s
-{
-    sector_t*	sector;
-    short	numlines;
-    short	firstline;
-    
-} subsector_t;
-
-
-
-//
-// The LineSeg.
-//
-typedef struct
-{
-    vertex_t*	v1;
-    vertex_t*	v2;
-    
-    fixed_t	offset;
-
-    angle_t	angle;
-
-    side_t*	sidedef;
-    line_t*	linedef;
-
-    // Sector references.
-    // Could be retrieved from linedef, too.
-    // backsector is NULL for one sided lines
-    sector_t*	frontsector;
-    sector_t*	backsector;
-    
-} seg_t;
-
-
-
-//
-// BSP node.
-//
-typedef struct
-{
-    // Partition line.
-    fixed_t	x;
-    fixed_t	y;
-    fixed_t	dx;
-    fixed_t	dy;
-
-    // Bounding box for each child.
-    fixed_t	bbox[2][4];
-
-    // If NF_SUBSECTOR its a subsector.
-    unsigned short children[2];
-    
-} node_t;
-
-
-
-
-// PC direct to screen pointers
-//B UNUSED - keep till detailshift in r_draw.c resolved
-//extern byte*	destview;
-//extern byte*	destscreen;
-
-
-
-
-
-//
-// OTHER TYPES
-//
-
-// This could be wider for >8 bit display.
-// Indeed, true color support is posibble
-//  precalculating 24bpp lightmap/colormap LUT.
-//  from darkening PLAYPAL to all black.
-// Could even us emore than 32 levels.
-typedef byte	lighttable_t;	
-
-
-
-
-//
-// ?
-//
-typedef struct drawseg_s
-{
-    seg_t*		curline;
-    int			x1;
-    int			x2;
-
-    fixed_t		scale1;
-    fixed_t		scale2;
-    fixed_t		scalestep;
-
-    // 0=none, 1=bottom, 2=top, 3=both
-    int			silhouette;
-
-    // do not clip sprites above this
-    fixed_t		bsilheight;
-
-    // do not clip sprites below this
-    fixed_t		tsilheight;
-    
-    // Pointers to lists for sprite clipping,
-    //  all three adjusted so [x1] is first value.
-    short*		sprtopclip;		
-    short*		sprbottomclip;	
-    short*		maskedtexturecol;
-    
-} drawseg_t;
-
-
-
-// A vissprite_t is a thing
-//  that will be drawn during a refresh.
-// I.e. a sprite object that is partly visible.
-typedef struct vissprite_s
-{
-    // Doubly linked list.
-    struct vissprite_s*	prev;
-    struct vissprite_s*	next;
-    
-    int			x1;
-    int			x2;
-
-    // for line side calculation
-    fixed_t		gx;
-    fixed_t		gy;		
-
-    // global bottom / top for silhouette clipping
-    fixed_t		gz;
-    fixed_t		gzt;
-
-    // horizontal position of x1
-    fixed_t		startfrac;
-    
-    fixed_t		scale;
-    
-    // negative if flipped
-    fixed_t		xiscale;	
-
-    fixed_t		texturemid;
-    int			patch;
-
-    // for color translation and shadow draw,
-    //  maxbright frames as well
-    lighttable_t*	colormap;
-   
-    int			mobjflags;
-    
-} vissprite_t;
-
-
-//	
-// Sprites are patches with a special naming convention
-//  so they can be recognized by R_InitSprites.
-// The base name is NNNNFx or NNNNFxFx, with
-//  x indicating the rotation, x = 0, 1-7.
-// The sprite and frame specified by a thing_t
-//  is range checked at run time.
-// A sprite is a patch_t that is assumed to represent
-//  a three dimensional object and may have multiple
-//  rotations pre drawn.
-// Horizontal flipping is used to save space,
-//  thus NNNNF2F5 defines a mirrored patch.
-// Some sprites will only have one picture used
-// for all views: NNNNF0
-//
-typedef struct
-{
-    // If false use 0 for any position.
-    // Note: as eight entries are available,
-    //  we might as well insert the same name eight times.
-    boolean	rotate;
-
-    // Lump to use for view angles 0-7.
-    short	lump[8];
-
-    // Flip bit (1 = flip) to use for view angles 0-7.
-    byte	flip[8];
-    
-} spriteframe_t;
-
-
-
-//
-// A sprite definition:
-//  a number of animation frames.
-//
-typedef struct
-{
-    int			numframes;
-    spriteframe_t*	spriteframes;
-
-} spritedef_t;
-
-
-
-//
-// Now what is a visplane, anyway?
-// 
-typedef struct
-{
-  fixed_t		height;
-  int			picnum;
-  int			lightlevel;
-  int			minx;
-  int			maxx;
-  
-  // leave pads for [minx-1]/[maxx+1]
-  
-  byte		pad1;
-  // Here lies the rub for all
-  //  dynamic resize/change of resolution.
-  byte		top[SCREENWIDTH];
-  byte		pad2;
-  byte		pad3;
-  // See above.
-  byte		bottom[SCREENWIDTH];
-  byte		pad4;
-
-} visplane_t;
-
-
-
-
-#endif
-
 // --- r_state.h ---
 //
 // Copyright(C) 1993-1996 Id Software, Inc.
@@ -5614,6 +5629,58 @@ int G_VanillaVersionCode(void);
 extern int vanilla_savegame_limit;
 extern int vanilla_demo_limit;
 #endif
+
+
+// --- v_patch.h ---
+//
+// Copyright(C) 1993-1996 Id Software, Inc.
+// Copyright(C) 2005-2014 Simon Howard
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// DESCRIPTION:
+//      Refresh/rendering module, shared data struct definitions.
+//
+
+
+#ifndef V_PATCH_H
+#define V_PATCH_H
+
+// Patches.
+// A patch holds one or more columns.
+// Patches are used for sprites and all masked pictures,
+// and we compose textures from the TEXTURE1/2 lists
+// of patches.
+
+typedef struct 
+{ 
+    short		width;		// bounding box size 
+    short		height; 
+    short		leftoffset;	// pixels to the left of origin 
+    short		topoffset;	// pixels below the origin 
+    int			columnofs[8];	// only [width] used
+    // the [0] is &columnofs[width] 
+} PACKEDATTR patch_t;
+
+// posts are runs of non masked source pixels
+typedef struct
+{
+    byte		topdelta;	// -1 is the last post in a column
+    byte		length; 	// length data bytes follows
+} PACKEDATTR post_t;
+
+// column_t is a list of 0 or more post_t, (byte)-1 terminated
+typedef post_t	column_t;
+
+#endif 
 
 
 // --- v_video.h ---
@@ -7034,237 +7101,6 @@ extern unsigned int net_local_is_freedoom;
 extern boolean drone;
 
 #endif /* #ifndef NET_CLIENT_H */
-
-// --- net_io.h ---
-//
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//      Network packet manipulation (net_packet_t)
-//
-
-#ifndef NET_IO_H
-#define NET_IO_H
-
-// include stripped
-
-extern net_addr_t net_broadcast_addr;
-
-net_context_t *NET_NewContext(void);
-void NET_AddModule(net_context_t *context, net_module_t *module);
-void NET_SendPacket(net_addr_t *addr, net_packet_t *packet);
-void NET_SendBroadcast(net_context_t *context, net_packet_t *packet);
-boolean NET_RecvPacket(net_context_t *context, net_addr_t **addr, 
-                       net_packet_t **packet);
-char *NET_AddrToString(net_addr_t *addr);
-void NET_FreeAddress(net_addr_t *addr);
-net_addr_t *NET_ResolveAddress(net_context_t *context, char *address);
-
-#endif  /* #ifndef NET_IO_H */
-
-
-// --- net_loop.h ---
-//
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//      Loopback network module for server compiled into the client
-//
-
-#ifndef NET_LOOP_H
-#define NET_LOOP_H
-
-// include stripped
-
-extern net_module_t net_loop_client_module;
-extern net_module_t net_loop_server_module;
-
-#endif /* #ifndef NET_LOOP_H */
-
-
-// --- net_packet.h ---
-//
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//     Definitions for use in networking code.
-//
-
-#ifndef NET_PACKET_H
-#define NET_PACKET_H
-
-// include stripped
-
-net_packet_t *NET_NewPacket(int initial_size);
-net_packet_t *NET_PacketDup(net_packet_t *packet);
-void NET_FreePacket(net_packet_t *packet);
-
-boolean NET_ReadInt8(net_packet_t *packet, unsigned int *data);
-boolean NET_ReadInt16(net_packet_t *packet, unsigned int *data);
-boolean NET_ReadInt32(net_packet_t *packet, unsigned int *data);
-
-boolean NET_ReadSInt8(net_packet_t *packet, signed int *data);
-boolean NET_ReadSInt16(net_packet_t *packet, signed int *data);
-boolean NET_ReadSInt32(net_packet_t *packet, signed int *data);
-
-char *NET_ReadString(net_packet_t *packet);
-
-void NET_WriteInt8(net_packet_t *packet, unsigned int i);
-void NET_WriteInt16(net_packet_t *packet, unsigned int i);
-void NET_WriteInt32(net_packet_t *packet, unsigned int i);
-
-void NET_WriteString(net_packet_t *packet, char *string);
-
-#endif /* #ifndef NET_PACKET_H */
-
-
-// --- net_query.h ---
-//
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//     Querying servers to find their current status.
-//
-
-#ifndef NET_QUERY_H
-#define NET_QUERY_H
-
-// include stripped
-
-typedef void (*net_query_callback_t)(net_addr_t *addr,
-                                     net_querydata_t *querydata,
-                                     unsigned int ping_time,
-                                     void *user_data);
-
-extern int NET_StartLANQuery(void);
-extern int NET_StartMasterQuery(void);
-
-extern void NET_LANQuery(void);
-extern void NET_MasterQuery(void);
-extern void NET_QueryAddress(char *addr);
-extern net_addr_t *NET_FindLANServer(void);
-
-extern int NET_Query_Poll(net_query_callback_t callback, void *user_data);
-
-extern net_addr_t *NET_Query_ResolveMaster(net_context_t *context);
-extern void NET_Query_AddToMaster(net_addr_t *master_addr);
-extern boolean NET_Query_CheckAddedToMaster(boolean *result);
-extern void NET_Query_MasterResponse(net_packet_t *packet);
-
-#endif /* #ifndef NET_QUERY_H */
-
-
-// --- net_sdl.h ---
-//
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//     Networking module which uses SDL_net
-//
-
-#ifndef NET_SDL_H
-#define NET_SDL_H
-
-// include stripped
-
-extern net_module_t net_sdl_module;
-
-#endif /* #ifndef NET_SDL_H */
-
-
-// --- net_server.h ---
-//
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// Network server code
-//
-
-#ifndef NET_SERVER_H
-#define NET_SERVER_H
-
-// initialize server and wait for connections
-
-void NET_SV_Init(void);
-
-// run server: check for new packets received etc.
-
-void NET_SV_Run(void);
-
-// Shut down the server
-// Blocks until all clients disconnect, or until a 5 second timeout
-
-void NET_SV_Shutdown(void);
-
-// Add a network module to the context used by the server
-
-void NET_SV_AddModule(net_module_t *module);
-
-// Register server with master server.
-
-void NET_SV_RegisterWithMaster(void);
-
-#endif /* #ifndef NET_SERVER_H */
-
 
 // --- r_bsp.h ---
 //
@@ -10627,6 +10463,237 @@ extern void NET_WaitForLaunch(void);
 #endif /* #ifndef NET_GUI_H */
 
 
+// --- net_io.h ---
+//
+// Copyright(C) 2005-2014 Simon Howard
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// DESCRIPTION:
+//      Network packet manipulation (net_packet_t)
+//
+
+#ifndef NET_IO_H
+#define NET_IO_H
+
+// include stripped
+
+extern net_addr_t net_broadcast_addr;
+
+net_context_t *NET_NewContext(void);
+void NET_AddModule(net_context_t *context, net_module_t *module);
+void NET_SendPacket(net_addr_t *addr, net_packet_t *packet);
+void NET_SendBroadcast(net_context_t *context, net_packet_t *packet);
+boolean NET_RecvPacket(net_context_t *context, net_addr_t **addr, 
+                       net_packet_t **packet);
+char *NET_AddrToString(net_addr_t *addr);
+void NET_FreeAddress(net_addr_t *addr);
+net_addr_t *NET_ResolveAddress(net_context_t *context, char *address);
+
+#endif  /* #ifndef NET_IO_H */
+
+
+// --- net_loop.h ---
+//
+// Copyright(C) 2005-2014 Simon Howard
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// DESCRIPTION:
+//      Loopback network module for server compiled into the client
+//
+
+#ifndef NET_LOOP_H
+#define NET_LOOP_H
+
+// include stripped
+
+extern net_module_t net_loop_client_module;
+extern net_module_t net_loop_server_module;
+
+#endif /* #ifndef NET_LOOP_H */
+
+
+// --- net_packet.h ---
+//
+// Copyright(C) 2005-2014 Simon Howard
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// DESCRIPTION:
+//     Definitions for use in networking code.
+//
+
+#ifndef NET_PACKET_H
+#define NET_PACKET_H
+
+// include stripped
+
+net_packet_t *NET_NewPacket(int initial_size);
+net_packet_t *NET_PacketDup(net_packet_t *packet);
+void NET_FreePacket(net_packet_t *packet);
+
+boolean NET_ReadInt8(net_packet_t *packet, unsigned int *data);
+boolean NET_ReadInt16(net_packet_t *packet, unsigned int *data);
+boolean NET_ReadInt32(net_packet_t *packet, unsigned int *data);
+
+boolean NET_ReadSInt8(net_packet_t *packet, signed int *data);
+boolean NET_ReadSInt16(net_packet_t *packet, signed int *data);
+boolean NET_ReadSInt32(net_packet_t *packet, signed int *data);
+
+char *NET_ReadString(net_packet_t *packet);
+
+void NET_WriteInt8(net_packet_t *packet, unsigned int i);
+void NET_WriteInt16(net_packet_t *packet, unsigned int i);
+void NET_WriteInt32(net_packet_t *packet, unsigned int i);
+
+void NET_WriteString(net_packet_t *packet, char *string);
+
+#endif /* #ifndef NET_PACKET_H */
+
+
+// --- net_query.h ---
+//
+// Copyright(C) 2005-2014 Simon Howard
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// DESCRIPTION:
+//     Querying servers to find their current status.
+//
+
+#ifndef NET_QUERY_H
+#define NET_QUERY_H
+
+// include stripped
+
+typedef void (*net_query_callback_t)(net_addr_t *addr,
+                                     net_querydata_t *querydata,
+                                     unsigned int ping_time,
+                                     void *user_data);
+
+extern int NET_StartLANQuery(void);
+extern int NET_StartMasterQuery(void);
+
+extern void NET_LANQuery(void);
+extern void NET_MasterQuery(void);
+extern void NET_QueryAddress(char *addr);
+extern net_addr_t *NET_FindLANServer(void);
+
+extern int NET_Query_Poll(net_query_callback_t callback, void *user_data);
+
+extern net_addr_t *NET_Query_ResolveMaster(net_context_t *context);
+extern void NET_Query_AddToMaster(net_addr_t *master_addr);
+extern boolean NET_Query_CheckAddedToMaster(boolean *result);
+extern void NET_Query_MasterResponse(net_packet_t *packet);
+
+#endif /* #ifndef NET_QUERY_H */
+
+
+// --- net_sdl.h ---
+//
+// Copyright(C) 2005-2014 Simon Howard
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// DESCRIPTION:
+//     Networking module which uses SDL_net
+//
+
+#ifndef NET_SDL_H
+#define NET_SDL_H
+
+// include stripped
+
+extern net_module_t net_sdl_module;
+
+#endif /* #ifndef NET_SDL_H */
+
+
+// --- net_server.h ---
+//
+// Copyright(C) 2005-2014 Simon Howard
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// Network server code
+//
+
+#ifndef NET_SERVER_H
+#define NET_SERVER_H
+
+// initialize server and wait for connections
+
+void NET_SV_Init(void);
+
+// run server: check for new packets received etc.
+
+void NET_SV_Run(void);
+
+// Shut down the server
+// Blocks until all clients disconnect, or until a 5 second timeout
+
+void NET_SV_Shutdown(void);
+
+// Add a network module to the context used by the server
+
+void NET_SV_AddModule(net_module_t *module);
+
+// Register server with master server.
+
+void NET_SV_RegisterWithMaster(void);
+
+#endif /* #ifndef NET_SERVER_H */
+
+
 // --- p_saveg.h ---
 //
 // Copyright(C) 1993-1996 Id Software, Inc.
@@ -10690,58 +10757,6 @@ extern boolean savegame_error;
 
 
 #endif
-
-// --- v_patch.h ---
-//
-// Copyright(C) 1993-1996 Id Software, Inc.
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//      Refresh/rendering module, shared data struct definitions.
-//
-
-
-#ifndef V_PATCH_H
-#define V_PATCH_H
-
-// Patches.
-// A patch holds one or more columns.
-// Patches are used for sprites and all masked pictures,
-// and we compose textures from the TEXTURE1/2 lists
-// of patches.
-
-typedef struct 
-{ 
-    short		width;		// bounding box size 
-    short		height; 
-    short		leftoffset;	// pixels to the left of origin 
-    short		topoffset;	// pixels below the origin 
-    int			columnofs[8];	// only [width] used
-    // the [0] is &columnofs[width] 
-} PACKEDATTR patch_t;
-
-// posts are runs of non masked source pixels
-typedef struct
-{
-    byte		topdelta;	// -1 is the last post in a column
-    byte		length; 	// length data bytes follows
-} PACKEDATTR post_t;
-
-// column_t is a list of 0 or more post_t, (byte)-1 terminated
-typedef post_t	column_t;
-
-#endif 
-
 
 // --- w_checksum.h ---
 //
@@ -11801,7 +11816,7 @@ const iwad_t **D_FindAllIWADs(int mask)
     char *filename;
     int i;
 
-    result = malloc(sizeof(iwad_t *) * (arrlen(iwads) + 1));
+    result = (const iwad_t **) malloc(sizeof(iwad_t *) * (arrlen(iwads) + 1));
     result_len = 0;
 
     // Try to find all IWADs
@@ -12553,7 +12568,7 @@ static char *GetGameName(char *gamename)
             // We also need to cut off spaces to get the basic name
 
             gamename_size = strlen(deh_sub) + 10;
-            gamename = Z_Malloc(gamename_size, PU_STATIC, 0);
+            gamename = (char *) Z_Malloc(gamename_size, PU_STATIC, 0);
             version = G_VanillaVersionCode();
             M_snprintf(gamename, gamename_size, deh_sub,
                        version / 100, version % 100);
@@ -12970,7 +12985,7 @@ static void D_Endoom(void)
         return;
     }
 
-    endoom = W_CacheLumpName(DEH_String("ENDOOM"), PU_STATIC);
+    endoom = (byte *) W_CacheLumpName(DEH_String("ENDOOM"), PU_STATIC);
 
     I_Endoom(endoom);
 
@@ -13998,7 +14013,7 @@ void doomgeneric_Create(int argc, char **argv)
 
 	M_FindResponseFile();
 
-	DG_ScreenBuffer = malloc(DOOMGENERIC_RESX * DOOMGENERIC_RESY * 4);
+	DG_ScreenBuffer = (pixel_t *) malloc(DOOMGENERIC_RESX * DOOMGENERIC_RESY * 4);
 
 	DG_Init();
 
@@ -16113,7 +16128,7 @@ static void IncreaseDemoBuffer(void)
     // Generate a new buffer twice the size
     new_length = current_length * 2;
     
-    new_demobuffer = Z_Malloc(new_length, PU_STATIC, 0);
+    new_demobuffer = (byte *) Z_Malloc(new_length, PU_STATIC, 0);
     new_demop = new_demobuffer + (demo_p - demobuffer);
 
     // Copy over the old data
@@ -16191,7 +16206,7 @@ void G_RecordDemo (char *name)
 
     usergame = false;
     demoname_size = strlen(name) + 5;
-    demoname = Z_Malloc(demoname_size, PU_STATIC, NULL);
+    demoname = (char *) Z_Malloc(demoname_size, PU_STATIC, NULL);
     M_snprintf(demoname, demoname_size, "%s.lmp", name);
     maxsize = 0x20000;
 
@@ -16206,7 +16221,7 @@ void G_RecordDemo (char *name)
     i = M_CheckParmWithArgs("-maxdemo", 1);
     if (i)
 	maxsize = atoi(myargv[i+1])*1024;
-    demobuffer = Z_Malloc (maxsize,PU_STATIC,NULL); 
+    demobuffer = (byte *) Z_Malloc (maxsize,PU_STATIC,NULL); 
     demoend = demobuffer + maxsize;
 	
     demorecording = true; 
@@ -16332,7 +16347,7 @@ void G_DoPlayDemo (void)
     int demoversion;
 	 
     gameaction = ga_nothing; 
-    demobuffer = demo_p = W_CacheLumpName (defdemoname, PU_STATIC); 
+    demobuffer = (byte *) demo_p = W_CacheLumpName (defdemoname, PU_STATIC); 
 
     demoversion = *demo_p++;
 
@@ -16818,7 +16833,7 @@ static byte *GenerateStretchTable(byte *palette, int pct)
     byte *col1;
     byte *col2;
 
-    result = Z_Malloc(256 * 256, PU_STATIC, NULL);
+    result = (byte *) Z_Malloc(256 * 256, PU_STATIC, NULL);
 
     for (x=0; x<256; ++x)
     {
@@ -18009,7 +18024,7 @@ void I_AtExit(atexit_func_t func, boolean run_on_error)
 {
     atexit_listentry_t *entry;
 
-    entry = malloc(sizeof(*entry));
+    entry = (atexit_listentry_t *) malloc(sizeof(*entry));
 
     entry->func = func;
     entry->run_on_error = run_on_error;
@@ -18051,7 +18066,7 @@ static byte *AutoAllocMemory(int *size, int default_ram, int min_ram)
 
         *size = default_ram * 1024 * 1024;
 
-        zonemem = malloc(*size);
+        zonemem = (byte *) malloc(*size);
 
         // Failed to allocate?  Reduce zone size until we reach a size
         // that is acceptable.
@@ -18218,7 +18233,7 @@ static char *EscapeShellString(char *string)
     char *r, *s;
 
     // In the worst case, every character might be escaped.
-    result = malloc(strlen(string) * 2 + 3);
+    result = (char *) malloc(strlen(string) * 2 + 3);
     r = result;
 
     // Enclosing quotes.
@@ -18270,7 +18285,7 @@ static int ZenityErrorBox(char *message)
     escaped_message = EscapeShellString(message);
 
     errorboxpath_size = strlen(ZENITY_BINARY) + strlen(escaped_message) + 19;
-    errorboxpath = malloc(errorboxpath_size);
+    errorboxpath = (char *) malloc(errorboxpath_size);
     M_snprintf(errorboxpath, errorboxpath_size, "%s --error --text=%s",
                ZENITY_BINARY, escaped_message);
 
@@ -19422,80 +19437,80 @@ char *sprnames[] = {
 
 
 // Doesn't work with g++, needs actionf_p1
-void  A_Light0();
-void A_WeaponReady();
-void A_Lower();
-void A_Raise();
-void A_Punch();
-void A_ReFire();
-void A_FirePistol();
-void A_Light1();
-void A_FireShotgun();
-void A_Light2();
-void A_FireShotgun2();
-void A_CheckReload();
-void A_OpenShotgun2();
-void A_LoadShotgun2();
-void A_CloseShotgun2();
-void A_FireCGun();
-void A_GunFlash();
-void A_FireMissile();
-void A_Saw();
-void A_FirePlasma();
-void A_BFGsound();
-void A_FireBFG();
-void A_BFGSpray();
-void A_Explode();
-void A_Pain();
-void A_PlayerScream();
-void A_Fall();
-void A_XScream();
-void A_Look();
-void A_Chase();
-void A_FaceTarget();
-void A_PosAttack();
-void A_Scream();
-void A_SPosAttack();
-void A_VileChase();
-void A_VileStart();
-void A_VileTarget();
-void A_VileAttack();
-void A_StartFire();
-void A_Fire();
-void A_FireCrackle();
-void A_Tracer();
-void A_SkelWhoosh();
-void A_SkelFist();
-void A_SkelMissile();
-void A_FatRaise();
-void A_FatAttack1();
-void A_FatAttack2();
-void A_FatAttack3();
-void A_BossDeath();
-void A_CPosAttack();
-void A_CPosRefire();
-void A_TroopAttack();
-void A_SargAttack();
-void A_HeadAttack();
-void A_BruisAttack();
-void A_SkullAttack();
-void A_Metal();
-void A_SpidRefire();
-void A_BabyMetal();
-void A_BspiAttack();
-void A_Hoof();
-void A_CyberAttack();
-void A_PainAttack();
-void A_PainDie();
-void A_KeenDie();
-void A_BrainPain();
-void A_BrainScream();
-void A_BrainDie();
-void A_BrainAwake();
-void A_BrainSpit();
-void A_SpawnSound();
-void A_SpawnFly();
-void A_BrainExplode();
+void A_Light0(struct player_s* player, struct pspdef_s* psp);
+void A_WeaponReady(struct player_s* player, struct pspdef_s* psp);
+void A_Lower(struct player_s* player, struct pspdef_s* psp);
+void A_Raise(struct player_s* player, struct pspdef_s* psp);
+void A_Punch(struct player_s* player, struct pspdef_s* psp);
+void A_ReFire(struct player_s* player, struct pspdef_s* psp);
+void A_FirePistol(struct player_s* player, struct pspdef_s* psp);
+void A_Light1(struct player_s* player, struct pspdef_s* psp);
+void A_FireShotgun(struct player_s* player, struct pspdef_s* psp);
+void A_Light2(struct player_s* player, struct pspdef_s* psp);
+void A_FireShotgun2(struct player_s* player, struct pspdef_s* psp);
+void A_CheckReload(struct player_s* player, struct pspdef_s* psp);
+void A_OpenShotgun2(struct player_s* player, struct pspdef_s* psp);
+void A_LoadShotgun2(struct player_s* player, struct pspdef_s* psp);
+void A_CloseShotgun2(struct player_s* player, struct pspdef_s* psp);
+void A_FireCGun(struct player_s* player, struct pspdef_s* psp);
+void A_GunFlash(struct player_s* player, struct pspdef_s* psp);
+void A_FireMissile(struct player_s* player, struct pspdef_s* psp);
+void A_Saw(struct player_s* player, struct pspdef_s* psp);
+void A_FirePlasma(struct player_s* player, struct pspdef_s* psp);
+void A_BFGsound(struct player_s* player, struct pspdef_s* psp);
+void A_FireBFG(struct player_s* player, struct pspdef_s* psp);
+void A_BFGSpray(struct player_s* player, struct pspdef_s* psp);
+void A_Explode(struct mobj_s* mo);
+void A_Pain(struct mobj_s* mo);
+void A_PlayerScream(struct mobj_s* mo);
+void A_Fall(struct mobj_s* mo);
+void A_XScream(struct mobj_s* mo);
+void A_Look(struct mobj_s* mo);
+void A_Chase(struct mobj_s* mo);
+void A_FaceTarget(struct mobj_s* mo);
+void A_PosAttack(struct mobj_s* mo);
+void A_Scream(struct mobj_s* mo);
+void A_SPosAttack(struct mobj_s* mo);
+void A_VileChase(struct mobj_s* mo);
+void A_VileStart(struct mobj_s* mo);
+void A_VileTarget(struct mobj_s* mo);
+void A_VileAttack(struct mobj_s* mo);
+void A_StartFire(struct mobj_s* mo);
+void A_Fire(struct mobj_s* mo);
+void A_FireCrackle(struct mobj_s* mo);
+void A_Tracer(struct mobj_s* mo);
+void A_SkelWhoosh(struct mobj_s* mo);
+void A_SkelFist(struct mobj_s* mo);
+void A_SkelMissile(struct mobj_s* mo);
+void A_FatRaise(struct mobj_s* mo);
+void A_FatAttack1(struct mobj_s* mo);
+void A_FatAttack2(struct mobj_s* mo);
+void A_FatAttack3(struct mobj_s* mo);
+void A_BossDeath(struct mobj_s* mo);
+void A_CPosAttack(struct mobj_s* mo);
+void A_CPosRefire(struct mobj_s* mo);
+void A_TroopAttack(struct mobj_s* mo);
+void A_SargAttack(struct mobj_s* mo);
+void A_HeadAttack(struct mobj_s* mo);
+void A_BruisAttack(struct mobj_s* mo);
+void A_SkullAttack(struct mobj_s* mo);
+void A_Metal(struct mobj_s* mo);
+void A_SpidRefire(struct mobj_s* mo);
+void A_BabyMetal(struct mobj_s* mo);
+void A_BspiAttack(struct mobj_s* mo);
+void A_Hoof(struct mobj_s* mo);
+void A_CyberAttack(struct mobj_s* mo);
+void A_PainAttack(struct mobj_s* mo);
+void A_PainDie(struct mobj_s* mo);
+void A_KeenDie(struct mobj_s* mo);
+void A_BrainPain(struct mobj_s* mo);
+void A_BrainScream(struct mobj_s* mo);
+void A_BrainDie(struct mobj_s* mo);
+void A_BrainAwake(struct mobj_s* mo);
+void A_BrainSpit(struct mobj_s* mo);
+void A_SpawnSound(struct mobj_s* mo);
+void A_SpawnFly(struct mobj_s* mo);
+void A_BrainExplode(struct mobj_s* mo);
 
 
 state_t	states[NUMSTATES] = {
@@ -26700,7 +26715,7 @@ int M_ReadFile(char *name, byte **buffer)
 
     length = M_FileLength(handle);
     
-    buf = Z_Malloc (length, PU_STATIC, NULL);
+    buf = (byte *) Z_Malloc (length, PU_STATIC, NULL);
     count = fread(buf, 1, length, handle);
     fclose (handle);
 	
@@ -26887,7 +26902,7 @@ char *M_StringReplace(const char *haystack, const char *needle,
 
     // Construct new string.
 
-    result = malloc(result_len);
+    result = (char *) malloc(result_len);
     if (result == NULL)
     {
         I_Error("M_StringReplace: Failed to allocate new string");
@@ -26997,7 +27012,7 @@ char *M_StringJoin(const char *s, ...)
     }
     va_end(args);
 
-    result = malloc(result_len);
+    result = (char *) malloc(result_len);
 
     if (result == NULL)
     {
@@ -27200,7 +27215,7 @@ MEMFILE *mem_fopen_read(void *buf, size_t buflen)
 {
 	MEMFILE *file;
 
-	file = Z_Malloc(sizeof(MEMFILE), PU_STATIC, 0);
+	file = (MEMFILE *) Z_Malloc(sizeof(MEMFILE), PU_STATIC, 0);
 
 	file->buf = (unsigned char *) buf;
 	file->buflen = buflen;
@@ -27248,10 +27263,10 @@ MEMFILE *mem_fopen_write(void)
 {
 	MEMFILE *file;
 
-	file = Z_Malloc(sizeof(MEMFILE), PU_STATIC, 0);
+	file = (MEMFILE *) Z_Malloc(sizeof(MEMFILE), PU_STATIC, 0);
 
 	file->alloced = 1024;
-	file->buf = Z_Malloc(file->alloced, PU_STATIC, 0);
+	file->buf = (unsigned char *) Z_Malloc(file->alloced, PU_STATIC, 0);
 	file->buflen = 0;
 	file->position = 0;
 	file->mode = MODE_WRITE;
@@ -27279,7 +27294,7 @@ size_t mem_fwrite(const void *ptr, size_t size, size_t nmemb, MEMFILE *stream)
 	{
 		unsigned char *newbuf;
 
-		newbuf = Z_Malloc(stream->alloced * 2, PU_STATIC, 0);
+		newbuf = (unsigned char *) Z_Malloc(stream->alloced * 2, PU_STATIC, 0);
 		memcpy(newbuf, stream->buf, stream->alloced);
 		Z_Free(stream->buf);
 		stream->buf = newbuf;
@@ -28284,7 +28299,7 @@ EV_DoCeiling
 	
 	// new door thinker
 	rtn = 1;
-	ceiling = Z_Malloc (sizeof(*ceiling), PU_LEVSPEC, 0);
+	ceiling = (ceiling_t *) Z_Malloc (sizeof(*ceiling), PU_LEVSPEC, 0);
 	P_AddThinker (&ceiling->thinker);
 	sec->specialdata = ceiling;
 	ceiling->thinker.function.acp1 = (actionf_p1)T_MoveCeiling;
@@ -28690,7 +28705,7 @@ EV_DoDoor
 	
 	// new door thinker
 	rtn = 1;
-	door = Z_Malloc (sizeof(*door), PU_LEVSPEC, 0);
+	door = (vldoor_t *) Z_Malloc (sizeof(*door), PU_LEVSPEC, 0);
 	P_AddThinker (&door->thinker);
 	sec->specialdata = door;
 
@@ -28817,7 +28832,7 @@ EV_VerticalDoor
 
     if (sec->specialdata)
     {
-	door = sec->specialdata;
+	door = (vldoor_t *) sec->specialdata;
 	switch(line->special)
 	{
 	  case	1: // ONLY FOR "RAISE" DOORS, NOT "OPEN"s
@@ -28891,7 +28906,7 @@ EV_VerticalDoor
 	
     
     // new door thinker
-    door = Z_Malloc (sizeof(*door), PU_LEVSPEC, 0);
+    door = (vldoor_t *) Z_Malloc (sizeof(*door), PU_LEVSPEC, 0);
     P_AddThinker (&door->thinker);
     sec->specialdata = door;
     door->thinker.function.acp1 = (actionf_p1) T_VerticalDoor;
@@ -28941,7 +28956,7 @@ void P_SpawnDoorCloseIn30 (sector_t* sec)
 {
     vldoor_t*	door;
 	
-    door = Z_Malloc ( sizeof(*door), PU_LEVSPEC, 0);
+    door = (vldoor_t *) Z_Malloc ( sizeof(*door), PU_LEVSPEC, 0);
 
     P_AddThinker (&door->thinker);
 
@@ -28966,7 +28981,7 @@ P_SpawnDoorRaiseIn5Mins
 {
     vldoor_t*	door;
 	
-    door = Z_Malloc ( sizeof(*door), PU_LEVSPEC, 0);
+    door = (vldoor_t *) Z_Malloc ( sizeof(*door), PU_LEVSPEC, 0);
     
     P_AddThinker (&door->thinker);
 
@@ -31479,7 +31494,7 @@ EV_DoFloor
 	
 	// new floor thinker
 	rtn = 1;
-	floor = Z_Malloc (sizeof(*floor), PU_LEVSPEC, 0);
+	floor = (floormove_t *) Z_Malloc (sizeof(*floor), PU_LEVSPEC, 0);
 	P_AddThinker (&floor->thinker);
 	sec->specialdata = floor;
 	floor->thinker.function.acp1 = (actionf_p1) T_MoveFloor;
@@ -31682,7 +31697,7 @@ EV_BuildStairs
 	
 	// new floor thinker
 	rtn = 1;
-	floor = Z_Malloc (sizeof(*floor), PU_LEVSPEC, 0);
+	floor = (floormove_t *) Z_Malloc (sizeof(*floor), PU_LEVSPEC, 0);
 	P_AddThinker (&floor->thinker);
 	sec->specialdata = floor;
 	floor->thinker.function.acp1 = (actionf_p1) T_MoveFloor;
@@ -31735,7 +31750,7 @@ EV_BuildStairs
 					
 		sec = tsec;
 		secnum = newsecnum;
-		floor = Z_Malloc (sizeof(*floor), PU_LEVSPEC, 0);
+		floor = (floormove_t *) Z_Malloc (sizeof(*floor), PU_LEVSPEC, 0);
 
 		P_AddThinker (&floor->thinker);
 
@@ -32747,7 +32762,7 @@ void P_SpawnFireFlicker (sector_t*	sector)
     // Nothing special about it during gameplay.
     sector->special = 0; 
 	
-    flick = Z_Malloc ( sizeof(*flick), PU_LEVSPEC, 0);
+    flick = (fireflicker_t *) Z_Malloc ( sizeof(*flick), PU_LEVSPEC, 0);
 
     P_AddThinker (&flick->thinker);
 
@@ -32802,7 +32817,7 @@ void P_SpawnLightFlash (sector_t*	sector)
     // nothing special about it during gameplay
     sector->special = 0;	
 	
-    flash = Z_Malloc ( sizeof(*flash), PU_LEVSPEC, 0);
+    flash = (lightflash_t *) Z_Malloc ( sizeof(*flash), PU_LEVSPEC, 0);
 
     P_AddThinker (&flash->thinker);
 
@@ -32859,7 +32874,7 @@ P_SpawnStrobeFlash
 {
     strobe_t*	flash;
 	
-    flash = Z_Malloc ( sizeof(*flash), PU_LEVSPEC, 0);
+    flash = (strobe_t *) Z_Malloc ( sizeof(*flash), PU_LEVSPEC, 0);
 
     P_AddThinker (&flash->thinker);
 
@@ -33016,7 +33031,7 @@ void P_SpawnGlowingLight(sector_t*	sector)
 {
     glow_t*	g;
 	
-    g = Z_Malloc( sizeof(*g), PU_LEVSPEC, 0);
+    g = (glow_t *) Z_Malloc( sizeof(*g), PU_LEVSPEC, 0);
 
     P_AddThinker(&g->thinker);
 
@@ -35999,7 +36014,7 @@ P_SpawnMobj
     state_t*	st;
     mobjinfo_t*	info;
 	
-    mobj = Z_Malloc (sizeof(*mobj), PU_LEVEL, NULL);
+    mobj = (mobj_t *) Z_Malloc (sizeof(*mobj), PU_LEVEL, NULL);
     memset (mobj, 0, sizeof (*mobj));
     info = &mobjinfo[type];
 	
@@ -36697,7 +36712,7 @@ EV_DoPlat
 	
 	// Find lowest & highest floors around sector
 	rtn = 1;
-	plat = Z_Malloc( sizeof(*plat), PU_LEVSPEC, 0);
+	plat = (plat_t *) Z_Malloc( sizeof(*plat), PU_LEVSPEC, 0);
 	P_AddThinker(&plat->thinker);
 		
 	plat->type = type;
@@ -37860,10 +37875,10 @@ void P_LoadVertexes (int lump)
     numvertexes = W_LumpLength (lump) / sizeof(mapvertex_t);
 
     // Allocate zone memory for buffer.
-    vertexes = Z_Malloc (numvertexes*sizeof(vertex_t),PU_LEVEL,0);	
+    vertexes = (vertex_t *) Z_Malloc (numvertexes*sizeof(vertex_t),PU_LEVEL,0);	
 
     // Load data into cache.
-    data = W_CacheLumpNum (lump, PU_STATIC);
+    data = (byte *) W_CacheLumpNum (lump, PU_STATIC);
 	
     ml = (mapvertex_t *)data;
     li = vertexes;
@@ -37914,9 +37929,9 @@ void P_LoadSegs (int lump)
     int                 sidenum;
 	
     numsegs = W_LumpLength (lump) / sizeof(mapseg_t);
-    segs = Z_Malloc (numsegs*sizeof(seg_t),PU_LEVEL,0);	
+    segs = (seg_t *) Z_Malloc (numsegs*sizeof(seg_t),PU_LEVEL,0);	
     memset (segs, 0, numsegs*sizeof(seg_t));
-    data = W_CacheLumpNum (lump,PU_STATIC);
+    data = (byte *) W_CacheLumpNum (lump,PU_STATIC);
 	
     ml = (mapseg_t *)data;
     li = segs;
@@ -37974,8 +37989,8 @@ void P_LoadSubsectors (int lump)
     subsector_t*	ss;
 	
     numsubsectors = W_LumpLength (lump) / sizeof(mapsubsector_t);
-    subsectors = Z_Malloc (numsubsectors*sizeof(subsector_t),PU_LEVEL,0);	
-    data = W_CacheLumpNum (lump,PU_STATIC);
+    subsectors = (subsector_t *) Z_Malloc (numsubsectors*sizeof(subsector_t),PU_LEVEL,0);	
+    data = (byte *) W_CacheLumpNum (lump,PU_STATIC);
 	
     ms = (mapsubsector_t *)data;
     memset (subsectors,0, numsubsectors*sizeof(subsector_t));
@@ -38003,9 +38018,9 @@ void P_LoadSectors (int lump)
     sector_t*		ss;
 	
     numsectors = W_LumpLength (lump) / sizeof(mapsector_t);
-    sectors = Z_Malloc (numsectors*sizeof(sector_t),PU_LEVEL,0);	
+    sectors = (sector_t *) Z_Malloc (numsectors*sizeof(sector_t),PU_LEVEL,0);	
     memset (sectors, 0, numsectors*sizeof(sector_t));
-    data = W_CacheLumpNum (lump,PU_STATIC);
+    data = (byte *) W_CacheLumpNum (lump,PU_STATIC);
 	
     ms = (mapsector_t *)data;
     ss = sectors;
@@ -38038,8 +38053,8 @@ void P_LoadNodes (int lump)
     node_t*	no;
 	
     numnodes = W_LumpLength (lump) / sizeof(mapnode_t);
-    nodes = Z_Malloc (numnodes*sizeof(node_t),PU_LEVEL,0);	
-    data = W_CacheLumpNum (lump,PU_STATIC);
+    nodes = (node_t *) Z_Malloc (numnodes*sizeof(node_t),PU_LEVEL,0);	
+    data = (byte *) W_CacheLumpNum (lump,PU_STATIC);
 	
     mn = (mapnode_t *)data;
     no = nodes;
@@ -38074,7 +38089,7 @@ void P_LoadThings (int lump)
     int			numthings;
     boolean		spawn;
 
-    data = W_CacheLumpNum (lump,PU_STATIC);
+    data = (byte *) W_CacheLumpNum (lump,PU_STATIC);
     numthings = W_LumpLength (lump) / sizeof(mapthing_t);
 	
     mt = (mapthing_t *)data;
@@ -38132,9 +38147,9 @@ void P_LoadLineDefs (int lump)
     vertex_t*		v2;
 	
     numlines = W_LumpLength (lump) / sizeof(maplinedef_t);
-    lines = Z_Malloc (numlines*sizeof(line_t),PU_LEVEL,0);	
+    lines = (line_t *) Z_Malloc (numlines*sizeof(line_t),PU_LEVEL,0);	
     memset (lines, 0, numlines*sizeof(line_t));
-    data = W_CacheLumpNum (lump,PU_STATIC);
+    data = (byte *) W_CacheLumpNum (lump,PU_STATIC);
 	
     mld = (maplinedef_t *)data;
     ld = lines;
@@ -38211,9 +38226,9 @@ void P_LoadSideDefs (int lump)
     side_t*		sd;
 	
     numsides = W_LumpLength (lump) / sizeof(mapsidedef_t);
-    sides = Z_Malloc (numsides*sizeof(side_t),PU_LEVEL,0);	
+    sides = (side_t *) Z_Malloc (numsides*sizeof(side_t),PU_LEVEL,0);	
     memset (sides, 0, numsides*sizeof(side_t));
-    data = W_CacheLumpNum (lump,PU_STATIC);
+    data = (byte *) W_CacheLumpNum (lump,PU_STATIC);
 	
     msd = (mapsidedef_t *)data;
     sd = sides;
@@ -38243,7 +38258,7 @@ void P_LoadBlockMap (int lump)
     lumplen = W_LumpLength(lump);
     count = lumplen / 2;
 	
-    blockmaplump = Z_Malloc(lumplen, PU_LEVEL, NULL);
+    blockmaplump = (short *) Z_Malloc(lumplen, PU_LEVEL, NULL);
     W_ReadLump(lump, blockmaplump);
     blockmap = blockmaplump + 4;
 
@@ -38264,7 +38279,7 @@ void P_LoadBlockMap (int lump)
     // Clear out mobj chains
 
     count = sizeof(*blocklinks) * bmapwidth * bmapheight;
-    blocklinks = Z_Malloc(count, PU_LEVEL, 0);
+    blocklinks = (mobj_t **) Z_Malloc(count, PU_LEVEL, 0);
     memset(blocklinks, 0, count);
 }
 
@@ -38311,7 +38326,7 @@ void P_GroupLines (void)
     }
 
     // build line tables for each sector	
-    linebuffer = Z_Malloc (totallines*sizeof(line_t *), PU_LEVEL, 0);
+    linebuffer = (line_t **) Z_Malloc (totallines*sizeof(line_t *), PU_LEVEL, 0);
 
     for (i=0; i<numsectors; ++i)
     {
@@ -38459,11 +38474,11 @@ static void P_LoadReject(int lumpnum)
 
     if (lumplen >= minlength)
     {
-        rejectmatrix = W_CacheLumpNum(lumpnum, PU_LEVEL);
+        rejectmatrix = (byte *) W_CacheLumpNum(lumpnum, PU_LEVEL);
     }
     else
     {
-        rejectmatrix = Z_Malloc(minlength, PU_LEVEL, &rejectmatrix);
+        rejectmatrix = (byte *) Z_Malloc(minlength, PU_LEVEL, &rejectmatrix);
         W_ReadLump(lumpnum, rejectmatrix);
 
         PadRejectArray(rejectmatrix + lumplen, minlength - lumplen);
@@ -40267,7 +40282,7 @@ int EV_DoDonut(line_t*	line)
             }
 
 	    //	Spawn rising slime
-	    floor = Z_Malloc (sizeof(*floor), PU_LEVSPEC, 0);
+	    floor = (floormove_t *) Z_Malloc (sizeof(*floor), PU_LEVSPEC, 0);
 	    P_AddThinker (&floor->thinker);
 	    s2->specialdata = floor;
 	    floor->thinker.function.acp1 = (actionf_p1) T_MoveFloor;
@@ -40281,7 +40296,7 @@ int EV_DoDonut(line_t*	line)
 	    floor->floordestheight = s3_floorheight;
 	    
 	    //	Spawn lowering donut-hole
-	    floor = Z_Malloc (sizeof(*floor), PU_LEVSPEC, 0);
+	    floor = (floormove_t *) Z_Malloc (sizeof(*floor), PU_LEVSPEC, 0);
 	    P_AddThinker (&floor->thinker);
 	    s1->specialdata = floor;
 	    floor->thinker.function.acp1 = (actionf_p1) T_MoveFloor;
@@ -42566,7 +42581,7 @@ void R_GenerateComposite (int texnum)
 	
     texture = textures[texnum];
 
-    block = Z_Malloc (texturecompositesize[texnum],
+    block = (byte *) Z_Malloc (texturecompositesize[texnum],
 		      PU_STATIC, 
 		      &texturecomposite[texnum]);	
 
@@ -42580,7 +42595,7 @@ void R_GenerateComposite (int texnum)
 	 i<texture->patchcount;
 	 i++, patch++)
     {
-	realpatch = W_CacheLumpNum (patch->patch, PU_CACHE);
+	realpatch = (patch_t *) W_CacheLumpNum (patch->patch, PU_CACHE);
 	x1 = patch->originx;
 	x2 = x1 + SHORT(realpatch->width);
 
@@ -42652,7 +42667,7 @@ void R_GenerateLookup (int texnum)
 	 i<texture->patchcount;
 	 i++, patch++)
     {
-	realpatch = W_CacheLumpNum (patch->patch, PU_CACHE);
+	realpatch = (patch_t *) W_CacheLumpNum (patch->patch, PU_CACHE);
 	x1 = patch->originx;
 	x2 = x1 + SHORT(realpatch->width);
 	
@@ -42735,7 +42750,7 @@ static void GenerateTextureHashTable(void)
     int key;
 
     textures_hashtable 
-            = Z_Malloc(sizeof(texture_t *) * numtextures, PU_STATIC, 0);
+            = (texture_t **) Z_Malloc(sizeof(texture_t *) * numtextures, PU_STATIC, 0);
 
     memset(textures_hashtable, 0, sizeof(texture_t *) * numtextures);
 
@@ -42812,10 +42827,10 @@ void R_InitTextures (void)
     
     // Load the patch names from pnames.lmp.
     name[8] = 0;
-    names = W_CacheLumpName (DEH_String("PNAMES"), PU_STATIC);
+    names = (char *) W_CacheLumpName (DEH_String("PNAMES"), PU_STATIC);
     nummappatches = LONG ( *((int *)names) );
     name_p = names + 4;
-    patchlookup = Z_Malloc(nummappatches*sizeof(*patchlookup), PU_STATIC, NULL);
+    patchlookup = (int *) Z_Malloc(nummappatches*sizeof(*patchlookup), PU_STATIC, NULL);
 
     for (i = 0; i < nummappatches; i++)
     {
@@ -42827,14 +42842,14 @@ void R_InitTextures (void)
     // Load the map texture definitions from textures.lmp.
     // The data is contained in one or two lumps,
     //  TEXTURE1 for shareware, plus TEXTURE2 for commercial.
-    maptex = maptex1 = W_CacheLumpName (DEH_String("TEXTURE1"), PU_STATIC);
+    maptex = (int *) maptex1 = W_CacheLumpName (DEH_String("TEXTURE1"), PU_STATIC);
     numtextures1 = LONG(*maptex);
     maxoff = W_LumpLength (W_GetNumForName (DEH_String("TEXTURE1")));
     directory = maptex+1;
 	
     if (W_CheckNumForName (DEH_String("TEXTURE2")) != -1)
     {
-	maptex2 = W_CacheLumpName (DEH_String("TEXTURE2"), PU_STATIC);
+	maptex2 = (int *) W_CacheLumpName (DEH_String("TEXTURE2"), PU_STATIC);
 	numtextures2 = LONG(*maptex2);
 	maxoff2 = W_LumpLength (W_GetNumForName (DEH_String("TEXTURE2")));
     }
@@ -42846,13 +42861,13 @@ void R_InitTextures (void)
     }
     numtextures = numtextures1 + numtextures2;
 	
-    textures = Z_Malloc (numtextures * sizeof(*textures), PU_STATIC, 0);
-    texturecolumnlump = Z_Malloc (numtextures * sizeof(*texturecolumnlump), PU_STATIC, 0);
-    texturecolumnofs = Z_Malloc (numtextures * sizeof(*texturecolumnofs), PU_STATIC, 0);
-    texturecomposite = Z_Malloc (numtextures * sizeof(*texturecomposite), PU_STATIC, 0);
-    texturecompositesize = Z_Malloc (numtextures * sizeof(*texturecompositesize), PU_STATIC, 0);
-    texturewidthmask = Z_Malloc (numtextures * sizeof(*texturewidthmask), PU_STATIC, 0);
-    textureheight = Z_Malloc (numtextures * sizeof(*textureheight), PU_STATIC, 0);
+    textures = (texture_t **) Z_Malloc (numtextures * sizeof(*textures), PU_STATIC, 0);
+    texturecolumnlump = (short **) Z_Malloc (numtextures * sizeof(*texturecolumnlump), PU_STATIC, 0);
+    texturecolumnofs = (unsigned short **) Z_Malloc (numtextures * sizeof(*texturecolumnofs), PU_STATIC, 0);
+    texturecomposite = (byte **) Z_Malloc (numtextures * sizeof(*texturecomposite), PU_STATIC, 0);
+    texturecompositesize = (int *) Z_Malloc (numtextures * sizeof(*texturecompositesize), PU_STATIC, 0);
+    texturewidthmask = (int *) Z_Malloc (numtextures * sizeof(*texturewidthmask), PU_STATIC, 0);
+    textureheight = (fixed_t *) Z_Malloc (numtextures * sizeof(*textureheight), PU_STATIC, 0);
 
     totalwidth = 0;
     
@@ -42919,8 +42934,8 @@ void R_InitTextures (void)
 			 texture->name);
 	    }
 	}		
-	texturecolumnlump[i] = Z_Malloc (texture->width*sizeof(**texturecolumnlump), PU_STATIC,0);
-	texturecolumnofs[i] = Z_Malloc (texture->width*sizeof(**texturecolumnofs), PU_STATIC,0);
+	texturecolumnlump[i] = (short *) Z_Malloc (texture->width*sizeof(**texturecolumnlump), PU_STATIC,0);
+	texturecolumnofs[i] = (unsigned short *) Z_Malloc (texture->width*sizeof(**texturecolumnofs), PU_STATIC,0);
 
 	j = 1;
 	while (j*2 <= texture->width)
@@ -42944,7 +42959,7 @@ void R_InitTextures (void)
 	R_GenerateLookup (i);
     
     // Create translation table for global animation.
-    texturetranslation = Z_Malloc ((numtextures+1)*sizeof(*texturetranslation), PU_STATIC, 0);
+    texturetranslation = (int *) Z_Malloc ((numtextures+1)*sizeof(*texturetranslation), PU_STATIC, 0);
     
     for (i=0 ; i<numtextures ; i++)
 	texturetranslation[i] = i;
@@ -42966,7 +42981,7 @@ void R_InitFlats (void)
     numflats = lastflat - firstflat + 1;
 	
     // Create translation table for global animation.
-    flattranslation = Z_Malloc ((numflats+1)*sizeof(*flattranslation), PU_STATIC, 0);
+    flattranslation = (int *) Z_Malloc ((numflats+1)*sizeof(*flattranslation), PU_STATIC, 0);
     
     for (i=0 ; i<numflats ; i++)
 	flattranslation[i] = i;
@@ -42988,16 +43003,16 @@ void R_InitSpriteLumps (void)
     lastspritelump = W_GetNumForName (DEH_String("S_END")) - 1;
     
     numspritelumps = lastspritelump - firstspritelump + 1;
-    spritewidth = Z_Malloc (numspritelumps*sizeof(*spritewidth), PU_STATIC, 0);
-    spriteoffset = Z_Malloc (numspritelumps*sizeof(*spriteoffset), PU_STATIC, 0);
-    spritetopoffset = Z_Malloc (numspritelumps*sizeof(*spritetopoffset), PU_STATIC, 0);
+    spritewidth = (fixed_t *) Z_Malloc (numspritelumps*sizeof(*spritewidth), PU_STATIC, 0);
+    spriteoffset = (fixed_t *) Z_Malloc (numspritelumps*sizeof(*spriteoffset), PU_STATIC, 0);
+    spritetopoffset = (fixed_t *) Z_Malloc (numspritelumps*sizeof(*spritetopoffset), PU_STATIC, 0);
 	
     for (i=0 ; i< numspritelumps ; i++)
     {
 	if (!(i&63))
 	    printf (".");
 
-	patch = W_CacheLumpNum (firstspritelump+i, PU_CACHE);
+	patch = (patch_t *) W_CacheLumpNum (firstspritelump+i, PU_CACHE);
 	spritewidth[i] = SHORT(patch->width)<<FRACBITS;
 	spriteoffset[i] = SHORT(patch->leftoffset)<<FRACBITS;
 	spritetopoffset[i] = SHORT(patch->topoffset)<<FRACBITS;
@@ -43016,7 +43031,7 @@ void R_InitColormaps (void)
     // Load in the light tables, 
     //  256 byte align tables.
     lump = W_GetNumForName(DEH_String("COLORMAP"));
-    colormaps = W_CacheLumpNum(lump, PU_STATIC);
+    colormaps = (lighttable_t *) W_CacheLumpNum(lump, PU_STATIC);
 }
 
 
@@ -43143,7 +43158,7 @@ void R_PrecacheLevel (void)
 	return;
     
     // Precache flats.
-    flatpresent = Z_Malloc(numflats, PU_STATIC, NULL);
+    flatpresent = (char *) Z_Malloc(numflats, PU_STATIC, NULL);
     memset (flatpresent,0,numflats);	
 
     for (i=0 ; i<numsectors ; i++)
@@ -43167,7 +43182,7 @@ void R_PrecacheLevel (void)
     Z_Free(flatpresent);
     
     // Precache textures.
-    texturepresent = Z_Malloc(numtextures, PU_STATIC, NULL);
+    texturepresent = (char *) Z_Malloc(numtextures, PU_STATIC, NULL);
     memset (texturepresent,0, numtextures);
 	
     for (i=0 ; i<numsides ; i++)
@@ -43204,7 +43219,7 @@ void R_PrecacheLevel (void)
     Z_Free(texturepresent);
     
     // Precache sprites.
-    spritepresent = Z_Malloc(numsprites, PU_STATIC, NULL);
+    spritepresent = (char *) Z_Malloc(numsprites, PU_STATIC, NULL);
     memset (spritepresent,0, numsprites);
 	
     for (th = thinkercap.next ; th != &thinkercap ; th=th->next)
@@ -43772,7 +43787,7 @@ void R_InitTranslationTables (void)
 {
     int		i;
 	
-    translationtables = Z_Malloc (256*3, PU_STATIC, 0);
+    translationtables = (byte *) Z_Malloc (256*3, PU_STATIC, 0);
     
     // translate just the 16 green colors
     for (i=0 ; i<256 ; i++)
@@ -44084,7 +44099,7 @@ void R_FillBackScreen (void)
 	
     if (background_buffer == NULL)
     {
-        background_buffer = Z_Malloc(SCREENWIDTH * (SCREENHEIGHT - SBARHEIGHT),
+        background_buffer = (byte *) Z_Malloc(SCREENWIDTH * (SCREENHEIGHT - SBARHEIGHT),
                                      PU_STATIC, NULL);
     }
 
@@ -44093,7 +44108,7 @@ void R_FillBackScreen (void)
     else
 	name = name1;
     
-    src = W_CacheLumpName(name, PU_CACHE); 
+    src = (byte *) W_CacheLumpName(name, PU_CACHE); 
     dest = background_buffer;
 	 
     for (y=0 ; y<SCREENHEIGHT-SBARHEIGHT ; y++) 
@@ -44115,19 +44130,19 @@ void R_FillBackScreen (void)
 
     V_UseBuffer(background_buffer);
 
-    patch = W_CacheLumpName(DEH_String("brdr_t"),PU_CACHE);
+    patch = (patch_t *) W_CacheLumpName(DEH_String("brdr_t"),PU_CACHE);
 
     for (x=0 ; x<scaledviewwidth ; x+=8)
 	V_DrawPatch(viewwindowx+x, viewwindowy-8, patch);
-    patch = W_CacheLumpName(DEH_String("brdr_b"),PU_CACHE);
+    patch = (patch_t *) W_CacheLumpName(DEH_String("brdr_b"),PU_CACHE);
 
     for (x=0 ; x<scaledviewwidth ; x+=8)
 	V_DrawPatch(viewwindowx+x, viewwindowy+viewheight, patch);
-    patch = W_CacheLumpName(DEH_String("brdr_l"),PU_CACHE);
+    patch = (patch_t *) W_CacheLumpName(DEH_String("brdr_l"),PU_CACHE);
 
     for (y=0 ; y<viewheight ; y+=8)
 	V_DrawPatch(viewwindowx-8, viewwindowy+y, patch);
-    patch = W_CacheLumpName(DEH_String("brdr_r"),PU_CACHE);
+    patch = (patch_t *) W_CacheLumpName(DEH_String("brdr_r"),PU_CACHE);
 
     for (y=0 ; y<viewheight ; y+=8)
 	V_DrawPatch(viewwindowx+scaledviewwidth, viewwindowy+y, patch);
@@ -45526,7 +45541,7 @@ void R_DrawPlanes (void)
 	
 	// regular flat
         lumpnum = firstflat + flattranslation[pl->picnum];
-	ds_source = W_CacheLumpNum(lumpnum, PU_STATIC);
+	ds_source = (byte *) W_CacheLumpNum(lumpnum, PU_STATIC);
 	
 	planeheight = abs(pl->height-viewz);
 	light = (pl->lightlevel >> LIGHTSEGSHIFT)+extralight;
@@ -46547,7 +46562,7 @@ void R_InitSpriteDefs (char** namelist)
     if (!numsprites)
 	return;
 		
-    sprites = Z_Malloc(numsprites *sizeof(*sprites), PU_STATIC, NULL);
+    sprites = (spritedef_t *) Z_Malloc(numsprites *sizeof(*sprites), PU_STATIC, NULL);
 	
     start = firstspritelump-1;
     end = lastspritelump+1;
@@ -46755,7 +46770,7 @@ R_DrawVisSprite
     patch_t*		patch;
 	
 	
-    patch = W_CacheLumpNum (vis->patch+firstspritelump, PU_CACHE);
+    patch = (patch_t *) W_CacheLumpNum (vis->patch+firstspritelump, PU_CACHE);
 
     dc_colormap = vis->colormap;
     
@@ -47465,7 +47480,7 @@ void S_Init(int sfxVolume, int musicVolume)
     // Allocating the internal channels for mixing
     // (the maximum numer of sounds rendered
     // simultaneously) within zone memory.
-    channels = Z_Malloc(snd_channels*sizeof(channel_t), PU_STATIC, 0);
+    channels = (channel_t *) Z_Malloc(snd_channels*sizeof(channel_t), PU_STATIC, 0);
 
     // Free all channels for use
     for (i=0 ; i<snd_channels ; i++)
@@ -51045,7 +51060,7 @@ void V_DrawShadowedPatch(int x, int y, patch_t *patch)
 
 void V_LoadTintTable(void)
 {
-    tinttable = W_CacheLumpName("TINTTAB", PU_STATIC);
+    tinttable = (byte *) W_CacheLumpName("TINTTAB", PU_STATIC);
 }
 
 //
@@ -51056,7 +51071,7 @@ void V_LoadTintTable(void)
 
 void V_LoadXlaTable(void)
 {
-    xlatab = W_CacheLumpName("XLATAB", PU_STATIC);
+    xlatab = (byte *) W_CacheLumpName("XLATAB", PU_STATIC);
 }
 
 //
@@ -51223,7 +51238,7 @@ void WritePCXfile(char *filename, byte *data,
     pcx_t*	pcx;
     byte*	pack;
 	
-    pcx = Z_Malloc (width*height*2+1000, PU_STATIC, NULL);
+    pcx = (pcx_t *) Z_Malloc (width*height*2+1000, PU_STATIC, NULL);
 
     pcx->manufacturer = 0x0a;		// PCX id
     pcx->version = 5;			// 256 color
@@ -51542,7 +51557,7 @@ static int GetFileNumber(wad_file_t *handle)
     // Not found in list.  This is a new file we haven't seen yet.
     // Allocate another slot for this file.
 
-    open_wadfiles = realloc(open_wadfiles,
+    open_wadfiles = (wad_file_t **) realloc(open_wadfiles,
                             sizeof(wad_file_t *) * (num_open_wadfiles + 1));
     open_wadfiles[num_open_wadfiles] = handle;
 
@@ -51728,7 +51743,7 @@ static wad_file_t *W_StdC_OpenFile(char *path)
 
     // Create a new stdc_wad_file_t to hold the file handle.
 
-    result = Z_Malloc(sizeof(stdc_wad_file_t), PU_STATIC, 0);
+    result = (stdc_wad_file_t *) Z_Malloc(sizeof(stdc_wad_file_t), PU_STATIC, 0);
     result->wad.file_class = &stdc_wad_file;
     result->wad.mapped = NULL;
     result->wad.length = M_FileLength(fstream);
@@ -52071,7 +52086,7 @@ static void ExtendLumpInfo(int newnumlumps)
     lumpinfo_t *newlumpinfo;
     unsigned int i;
 
-    newlumpinfo = calloc(newnumlumps, sizeof(lumpinfo_t));
+    newlumpinfo = (lumpinfo_t *) calloc(newnumlumps, sizeof(lumpinfo_t));
 
     if (newlumpinfo == NULL)
     {
@@ -52151,7 +52166,7 @@ wad_file_t *W_AddFile (char *filename)
         // them back.  Effectively we're constructing a "fake WAD directory"
         // here, as it would appear on disk.
 
-		fileinfo = Z_Malloc(sizeof(filelump_t), PU_STATIC, 0);
+		fileinfo = (filelump_t *) Z_Malloc(sizeof(filelump_t), PU_STATIC, 0);
 		fileinfo->filepos = LONG(0);
 		fileinfo->size = LONG(wad_file->length);
 
@@ -52181,7 +52196,7 @@ wad_file_t *W_AddFile (char *filename)
 		header.numlumps = LONG(header.numlumps);
 		header.infotableofs = LONG(header.infotableofs);
 		length = header.numlumps*sizeof(filelump_t);
-		fileinfo = Z_Malloc(length, PU_STATIC, 0);
+		fileinfo = (filelump_t *) Z_Malloc(length, PU_STATIC, 0);
 
         W_Read(wad_file, header.infotableofs, fileinfo, length);
         newnumlumps += header.numlumps;
@@ -52388,7 +52403,7 @@ void *W_CacheLumpNum(int lumpnum, int tag)
     {
         // Already cached, so just switch the zone tag.
 
-        result = lump->cache;
+        result = (byte *) lump->cache;
         Z_ChangeTag(lump->cache, tag);
     }
     else
@@ -52397,7 +52412,7 @@ void *W_CacheLumpNum(int lumpnum, int tag)
 
         lump->cache = Z_Malloc(W_LumpLength(lumpnum), tag, &lump->cache);
 	W_ReadLump (lumpnum, lump->cache);
-        result = lump->cache;
+        result = (byte *) lump->cache;
     }
 	
     return result;
@@ -52532,7 +52547,7 @@ void W_GenerateHashTable(void)
     // Generate hash table
     if (numlumps > 0)
     {
-        lumphash = Z_Malloc(sizeof(lumpinfo_t *) * numlumps, PU_STATIC, NULL);
+        lumphash = (lumpinfo_t **) Z_Malloc(sizeof(lumpinfo_t *) * numlumps, PU_STATIC, NULL);
         memset(lumphash, 0, sizeof(lumpinfo_t *) * numlumps);
 
         for (i=0; i<numlumps; ++i)
@@ -52673,7 +52688,7 @@ void Z_ClearZone (memzone_t* zone)
 	zone->blocklist.prev =
 	block = (memblock_t *)( (byte *)zone + sizeof(memzone_t) );
     
-    zone->blocklist.user = (void *)zone;
+    zone->blocklist.user = (void **) (void *)zone;
     zone->blocklist.tag = PU_STATIC;
     zone->rover = block;
 	
@@ -52703,7 +52718,7 @@ void Z_Init (void)
 	mainzone->blocklist.prev =
 	block = (memblock_t *)( (byte *)mainzone + sizeof(memzone_t) );
 
-    mainzone->blocklist.user = (void *)mainzone;
+    mainzone->blocklist.user = (void **) (void *)mainzone;
     mainzone->blocklist.tag = PU_STATIC;
     mainzone->rover = block;
 	
@@ -53083,120 +53098,100 @@ unsigned int Z_ZoneSize(void)
 }
 
 
-// --- stubs ---
-// Stubs for sound, music, joystick, input — VEX has none of these
-// sys include stripped
 
-// Sound
-void I_InitSound(void) {}
+// === VEX STUBS ===
+void I_InitSound(boolean use_sfx_prefix) {}
 void I_ShutdownSound(void) {}
-int  I_GetSfxLumpNum(void* s) { return -1; }
-int  I_StartSound(void* s, int vol, int sep, int pitch) { return -1; }
+int  I_GetSfxLumpNum(sfxinfo_t* s) { return -1; }
+int  I_StartSound(sfxinfo_t* s, int ch, int vol, int sep) { return -1; }
 void I_StopSound(int h) {}
 int  I_SoundIsPlaying(int h) { return 0; }
 void I_UpdateSound(void) {}
 void I_UpdateSoundParams(int h, int vol, int sep) {}
-void I_PrecacheSounds(void* s, int n) {}
-
-// Music
+void I_PrecacheSounds(sfxinfo_t* s, int n) {}
 void I_InitMusic(void) {}
 void I_ShutdownMusic(void) {}
 void I_SetMusicVolume(int vol) {}
 void I_PauseSong(void) {}
 void I_ResumeSong(void) {}
 void* I_RegisterSong(void* data, int len) { return NULL; }
-void I_PlaySong(void* h, int loop) {}
+void I_PlaySong(void* h, boolean loop) {}
 void I_StopSong(void) {}
 void I_UnRegisterSong(void* h) {}
 int  snd_musicdevice = 0;
-
-// Joystick
 void I_InitJoystick(void) {}
 void I_BindJoystickVariables(void) {}
-
-// Input / endoom
 void I_GetEvent(void) {}
 void I_InitInput(void) {}
-void I_Endoom(void) {}
+void I_Endoom(byte* data) {}
 void I_BindSoundVariables(void) {}
-
-// Keyboard mapping (needed by m_menu.c)
 int vanilla_keyboard_mapping = 0;
-
-// Stubs for removed non-essential modules
-void WI_Start(void* wbstartstruct) {}
-void WI_Ticker(void) {}
-void WI_Drawer(void) {}
-void F_StartFinale(void) {}
-void F_Ticker(void) {}
-void F_Drawer(void) {}
-void F_StartCast(void) {}
-void F_CastTicker(void) {}
-void F_BunnyScroll(void) {}
-int F_CastResponder(void* ev) { return 0; }
-void F_DrawPatchCol(int x, void* patch, int col) {}
-void F_ArtScreenDrawer(void) {}
-void D_Wipe(void) {}
-void wipeDone(void) {}
-void wipe_StartScreen(int x, int y, int w, int h) {}
-void wipe_EndScreen(int x, int y, int w, int h) {}
-int  wipe_ScreenWipe(int wipeno, int x, int y, int w, int h, int ticks) { return 1; }
-
-void StatDump(void* wbstartstruct) {}
-void StatCopy(void* wbstartstruct) {}
-int  F_Responder(void* ev) { return 0; }
-void WI_End(void) {}
-
-// Automap stubs
+boolean automapactive = 0;
+patch_t* hu_font[HU_FONTSIZE];
+boolean chat_on = 0;
+boolean message_dontfuckwithme = 0;
+char HU_dequeueChatChar(void) { return 0; }
+char* player_names[4] = {(char*)"Green",(char*)"Indigo",(char*)"Brown",(char*)"Red"};
 void AM_Start(void) {}
 void AM_Stop(void) {}
 void AM_Drawer(void) {}
-int  AM_Responder(void* ev) { return 0; }
+boolean AM_Responder(event_t* ev) { return 0; }
 void AM_Ticker(void) {}
-
-// Config stubs
 void M_LoadDefaults(void) {}
 void M_SaveDefaults(void) {}
-void M_SaveDefaultsAlternate(const char* main, const char* extra) {}
-void M_BindVariable(const char* name, void* loc) {}
-void M_BindIntVariable(const char* name, int* loc) {}
-void M_BindFloatVariable(const char* name, float* loc) {}
-void M_BindStringVariable(const char* name, char** loc) {}
-int  M_GetIntVariable(const char* name) { return 0; }
-const char* M_GetStringVariable(const char* name) { return ""; }
-float M_GetFloatVariable(const char* name) { return 0.0f; }
-void M_SetVariable(const char* name, const char* val) {}
-int  M_SetIntVariable(const char* name, int val) { return 0; }
-
-int automapactive = 0;
-void M_SetConfigDir(const char* dir) {}
-void M_SetConfigFilenames(const char* main, const char* extra) {}
-const char* M_GetSaveGameDir(const char* iwadname) { return "/usd/"; }
-
-// Status bar stubs
+void M_SaveDefaultsAlternate(const char* m, const char* e) {}
+void M_BindVariable(const char* n, void* l) {}
+void M_BindIntVariable(const char* n, int* l) {}
+void M_BindFloatVariable(const char* n, float* l) {}
+void M_BindStringVariable(const char* n, char** l) {}
+int  M_GetIntVariable(const char* n) { return 0; }
+const char* M_GetStringVariable(const char* n) { return ""; }
+float M_GetFloatVariable(const char* n) { return 0.0f; }
+void M_SetVariable(const char* n, const char* v) {}
+int  M_SetIntVariable(const char* n, int v) { return 0; }
+void M_BindWeaponControls(void) {}
+void M_BindMapControls(void) {}
+void M_BindMenuControls(void) {}
+void M_BindChatControls(unsigned int n) {}
+void M_ApplyPlatformDefaults(void) {}
+int key_menu_confirm = 13;
+int key_multi_msgplayer[MAXPLAYERS] = {0};
+void M_BindBaseControls(void) {}
+void M_BindHereticControls(void) {}
+void M_BindHexenControls(void) {}
+void M_BindStrifeControls(void) {}
+void M_BindGamepadControls(void) {}
+void M_BindMouseControls(void) {}
+void M_SetConfigDir(const char* d) {}
+void M_SetConfigFilenames(const char* m, const char* e) {}
+const char* M_GetSaveGameDir(const char* n) { return "/usd/"; }
+const char* P_SaveGameFile(int slot) { return "/usd/doom.sav"; }
+void WI_Start(wbstartstruct_t* w) {}
+void WI_Ticker(void) {}
+void WI_Drawer(void) {}
+void WI_End(void) {}
+boolean WI_Responder(event_t* ev) { return 0; }
+void F_StartFinale(void) {}
+void F_Ticker(void) {}
+void F_Drawer(void) {}
+boolean F_Responder(event_t* ev) { return 0; }
+void wipe_StartScreen(int x,int y,int w,int h) {}
+void wipe_EndScreen(int x,int y,int w,int h) {}
+int  wipe_ScreenWipe(int wipeno,int x,int y,int w,int h,int t) { return 1; }
+void StatDump(void) {}
+void StatCopy(wbstartstruct_t* w) {}
 void ST_Init(void) {}
 void ST_Ticker(void) {}
-void ST_Drawer(int fullscreen, int refresh) {}
+void ST_Drawer(boolean f,boolean r) {}
 void ST_Start(void) {}
 void ST_Stop(void) {}
-int  ST_Responder(void* ev) { return 0; }
-
-// HUD stubs
+boolean ST_Responder(event_t* ev) { return 0; }
 void HU_Init(void) {}
 void HU_Start(void) {}
 void HU_Ticker(void) {}
 void HU_Drawer(void) {}
-int  HU_Responder(void* ev) { return 0; }
+boolean HU_Responder(event_t* ev) { return 0; }
 void HU_Erase(void) {}
-
-// HU symbols referenced by menu/game
-void* hu_font[128] = {0};
-int   chat_on = 0;
-int   message_dontfuckwithme = 0;
-char  HU_dequeueChatChar(void) { return 0; }
-const char* player_names[] = {"Green", "Indigo", "Brown", "Red"};
-
-// Net/loop stubs
 void D_InitNetGame(void) {}
 void NetUpdate(void) {}
 void D_QuitNetGame(void) {}
@@ -53204,58 +53199,14 @@ int  GetLowTic(void) { return 0; }
 void TryRunTics(void) {}
 void D_StartGameLoop(void) {}
 void D_GameLoop(void) {}
-int  D_NetGetWad(const char* name) { return 0; }
-void D_ReceiveTic(void* ticcmds, void* playeringame) {}
-int  D_RegisterSerialDevice(void* reg) { return 0; }
-void I_InitNetwork(void) {}
-void I_NetCmd(void) {}
-extern void G_BuildTiccmd(void* buf);
-int netcmds[8][8];
-
-// d_loop.c variables
-int gametic = 0;
-int singletics = 1;
+int  D_NetGetWad(const char* n) { return 0; }
 void D_ConnectNetGame(void) {}
 void D_CheckNetGame(void) {}
-
-// Savegame stubs
-void P_UnArchivePlayers(void) {}
-void P_UnArchiveWorld(void) {}
-void P_UnArchiveThinkers(void) {}
-void P_UnArchiveSpecials(void) {}
-void P_ArchivePlayers(void) {}
-void P_ArchiveWorld(void) {}
-void P_ArchiveThinkers(void) {}
-void P_ArchiveSpecials(void) {}
-
-const char* P_SaveGameFile(int slot) { return "/usd/doom.sav"; }
-
-void M_BindBaseControls(void) {}
-void M_BindHereticControls(void) {}
-void M_BindHexenControls(void) {}
-void M_BindStrifeControls(void) {}
-void M_BindGamepadControls(void) {}
-void M_BindMouseControls(void) {}
-
-void M_BindWeaponControls(void) {}
-void M_BindMapControls(void) {}
-void M_BindMenuControls(void) {}
-void M_BindChatControls(unsigned int n) {}
-void M_ApplyPlatformDefaults(void) {}
-int key_menu_confirm = 13;
-int key_multi_msgplayer[8] = {0};
-
-// Cheat stubs
-typedef struct { void* sequence; void* p; } cheatseq_t;
-int  cht_CheckCheat(cheatseq_t* cht, char key) { return 0; }
-void cht_GetParam(cheatseq_t* cht, char* buf) {}
-
-// Minimal sound data stubs (sound is disabled anyway)
-typedef struct { const char* name; int singularity; int priority; void* link; int pitch; int volume; void* data; int usefulness; int lumpnum; int numchannels; } sfxinfo_t;
-typedef struct { const char* name; int mapmusic; } musicinfo_t;
-sfxinfo_t S_sfx[200] = {{0}};
-musicinfo_t S_music[100] = {{0}};
-
+void I_InitNetwork(void) {}
+void I_NetCmd(void) {}
+int gametic = 0;
+boolean singletics = 0;
+ticcmd_t* netcmds = NULL;
 #ifdef __cplusplus
 }
 #endif
