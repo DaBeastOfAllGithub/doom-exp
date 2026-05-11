@@ -1,4 +1,3 @@
 # this is just doom on the vex exp brain
-there are still a few compiling errors, but theres way less than before
 
-this is vibecoded, i dont like writing in C++
+I'm still working on it, so it currently doesn't work. (feel free to fork)
