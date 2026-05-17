@@ -1,6 +1,7 @@
 #ifdef __cplusplus
 extern "C" {
 #endif
+#pragma clang diagnostic ignored "-Wwritable-strings"
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
@@ -10,8 +11,32 @@ extern "C" {
 #include <ctype.h>
 #include <limits.h>
 #include <stdarg.h>
+struct sfxinfo_struct; typedef struct sfxinfo_struct sfxinfo_t;
+struct mobj_s; typedef struct mobj_s mobj_t;
+#if 0 // DOOM_VEX: duplicate cheatseq_t
+#define MAX_CHEAT_LEN 25
+#define MAX_CHEAT_PARAMS 5
+typedef struct
+{
+    // settings for this cheat
+
+    char sequence[MAX_CHEAT_LEN];
+    size_t sequence_len;
+    int parameter_chars;
+
+    // state used during the game
+
+    size_t chars_read;
+    int param_chars_read;
+    char parameter_buf[MAX_CHEAT_PARAMS];
+} cheatseq_t;
+#endif
 #include <errno.h>
 #include <sys/stat.h>
+#ifdef mode_t
+#undef mode_t
+typedef unsigned int mode_t;
+#endif
 
 #define TICRATE 35
 #define SCREENWIDTH 320
@@ -24,9 +49,6 @@ extern "C" {
 #define Z_Malloc(s,t,p) malloc(s)
 #define Z_Realloc(p,s,t,u) realloc(p,s)
 #define Z_Calloc(s,n,t,p) calloc(n,s)
-#define Z_Free(p) free(p)
-#define Z_ChangeTag(p,t) ((void)(p))
-#define Z_ChangeTag2(p,t,f,l) ((void)(p))
 
 // --- doomtype.h ---
 //
@@ -2884,6 +2906,7 @@ typedef struct mobj_s
 extern sfxinfo_t	S_sfx[];
 
 // the complete set of music
+struct musicinfo_s; typedef struct musicinfo_s musicinfo_t; // fwd
 extern musicinfo_t	S_music[];
 
 //
@@ -3530,6 +3553,7 @@ void D_CheckCorrectIWAD(GameMission_t mission);
 // drawn directly on the view screen,
 // coordinates are given for a 320*200 view screen.
 //
+#undef NUMPSPRITES
 typedef enum
 {
     ps_weapon,
@@ -4051,11 +4075,11 @@ extern  ticcmd_t       *netcmds;
 // sys include stripped
 
 #ifndef DOOMGENERIC_RESX
-#define DOOMGENERIC_RESX 640
+#define DOOMGENERIC_RESX 320
 #endif  // DOOMGENERIC_RESX
 
 #ifndef DOOMGENERIC_RESY
-#define DOOMGENERIC_RESY 400
+#define DOOMGENERIC_RESY 200
 #endif  // DOOMGENERIC_RESY
 
 
@@ -4307,8 +4331,8 @@ enum
 };
         
 
-void	Z_Init (void);
-void*	Z_Malloc (int size, int tag, void *ptr);
+// malloc conflict removed: void	Z_Init (void);
+// DOOM_VEX: Z_Malloc is a macro, declaration omitted
 void    Z_Free (void *ptr);
 void    Z_FreeTags (int lowtag, int hightag);
 void    Z_DumpHeap (int lowtag, int hightag);
@@ -10859,6 +10883,10 @@ void W_PrintDirectory(void);
 #endif /* #ifndef W_MERGE_H */
 
 
+
+void I_SetPalette(byte* palette) {}
+void V_DrawPatch(int x, int y, patch_t* patch) {}
+void V_DrawPatchDirect(int x, int y, patch_t* patch) {}
 // --- d_event.c ---
 //
 // Copyright(C) 1993-1996 Id Software, Inc.
@@ -11169,8 +11197,7 @@ static registry_value_t uninstall_values[] =
         HKEY_LOCAL_MACHINE,
         SOFTWARE_KEY "\\Microsoft\\Windows\\CurrentVersion\\"
             "Uninstall\\Ultimate Doom for Windows 95",
-        "UninstallString",
-    },
+        "Uninstal",,
 
     // Doom II, CD version (Depths of Doom trilogy)
 
@@ -11178,8 +11205,7 @@ static registry_value_t uninstall_values[] =
         HKEY_LOCAL_MACHINE,
         SOFTWARE_KEY "\\Microsoft\\Windows\\CurrentVersion\\"
             "Uninstall\\Doom II for Windows 95",
-        "UninstallString",
-    },
+        "Uninstal",,
 
     // Final Doom
 
@@ -11187,8 +11213,7 @@ static registry_value_t uninstall_values[] =
         HKEY_LOCAL_MACHINE,
         SOFTWARE_KEY "\\Microsoft\\Windows\\CurrentVersion\\"
             "Uninstall\\Final Doom for Windows 95",
-        "UninstallString",
-    },
+        "Uninstal",,
 
     // Shareware version
 
@@ -11196,8 +11221,7 @@ static registry_value_t uninstall_values[] =
         HKEY_LOCAL_MACHINE,
         SOFTWARE_KEY "\\Microsoft\\Windows\\CurrentVersion\\"
             "Uninstall\\Doom Shareware for Windows 95",
-        "UninstallString",
-    },
+        "Uninstal",,
 };
 
 // Value installed by the Collector's Edition when it is installed
@@ -11206,8 +11230,7 @@ static registry_value_t collectors_edition_value =
 {
     HKEY_LOCAL_MACHINE,
     SOFTWARE_KEY "\\Activision\\DOOM Collector's Edition\\v1.0",
-    "INSTALLPATH",
-};
+    "INSTALLP",;
 
 // Subdirectories of the above install path, where IWADs are installed.
 
@@ -11215,8 +11238,7 @@ static char *collectors_edition_subdirs[] =
 {
     "Doom2",
     "Final Doom",
-    "Ultimate Doom",
-};
+    "Ultimate",;
 
 // Location where Steam is installed
 
@@ -11224,8 +11246,7 @@ static registry_value_t steam_install_location =
 {
     HKEY_LOCAL_MACHINE,
     SOFTWARE_KEY "\\Valve\\Steam",
-    "InstallPath",
-};
+    "InstallP",;
 
 // Subdirs of the steam install directory where IWADs are found
 
@@ -11240,8 +11261,7 @@ static char *steam_install_subdirs[] =
 
     // From Doom 3: BFG Edition:
 
-    "steamapps\\common\\DOOM 3 BFG Edition\\base\\wads",
-};
+    "steamapp",;
 
 #define STEAM_BFG_GUS_PATCHES \
     "steamapps\\common\\DOOM 3 BFG Edition\\base\\classicmusic\\instruments"
@@ -12079,7 +12099,7 @@ void D_Display (void)
     static  boolean		menuactivestate = false;
     static  boolean		inhelpscreensstate = false;
     static  boolean		fullscreen = false;
-    static  gamestate_t		oldgamestate = -1;
+    static  gamestate_t		oldgamestate = (gamestate_t) -1;
     static  int			borderdrawcount;
     int				nowtime;
     int				tics;
@@ -12098,7 +12118,7 @@ void D_Display (void)
     if (setsizeneeded)
     {
 		R_ExecuteSetViewSize ();
-		oldgamestate = -1;                      // force background redraw
+		oldgamestate = (gamestate_t) -1;                      // force background redraw
 		borderdrawcount = 3;
     }
 
@@ -12155,7 +12175,7 @@ void D_Display (void)
     
     // clean up border stuff
     if (gamestate != oldgamestate && gamestate != GS_LEVEL)
-    	I_SetPalette (W_CacheLumpName (DEH_String("PLAYPAL"),PU_CACHE));
+    	I_SetPalette ((byte*)W_CacheLumpName (DEH_String("PLAYPAL"),PU_CACHE));
 
     // see if the border needs to be initially drawn
     if (gamestate == GS_LEVEL && oldgamestate != GS_LEVEL)
@@ -12392,7 +12412,7 @@ void D_PageTicker (void)
 //
 void D_PageDrawer (void)
 {
-    V_DrawPatch (0, 0, W_CacheLumpName(pagename, PU_CACHE));
+    V_DrawPatch (0, 0, (patch_t*)W_CacheLumpName(pagename, PU_CACHE));
 }
 
 
@@ -12539,7 +12559,7 @@ static char *banners[] =
     // plutonia.wad
     "                   "
     "DOOM 2: Plutonia Experiment v%i.%i"
-    "                           ",
+    "        ",
 };
 
 //
@@ -12607,7 +12627,7 @@ static void SetMissionForPackName(char *pack_name)
     {
         if (!strcasecmp(pack_name, packs[i].name))
         {
-            gamemission = packs[i].mission;
+            gamemission = (GameMission_t) packs[i].mission;
             return;
         }
     }
@@ -12847,8 +12867,7 @@ static struct
     {"Final Doom",           "final",      exe_final},
     {"Final Doom (alt)",     "final2",     exe_final2},
     {"Chex Quest",           "chex",       exe_chex},
-    { NULL,                  NULL,         0},
-};
+    { NULL,                   NULL,        (GameVersion_t)0 },
 
 // Initialize the game version
 
@@ -13089,628 +13108,7 @@ void D_DoomMain (void)
     //!
     // @category net
     //
-    // Start a dedicated server, routing packets but not participating
-    // in the game itself.
-    //
 
-    if (M_CheckParm("-dedicated") > 0)
-    {
-        printf("Dedicated server mode.\n");
-        NET_DedicatedServer();
-
-        // Never returns
-    }
-
-    //!
-    // @category net
-    //
-    // Query the Internet master server for a global list of active
-    // servers.
-    //
-
-    if (M_CheckParm("-search"))
-    {
-        NET_MasterQuery();
-        exit(0);
-    }
-
-    //!
-    // @arg <address>
-    // @category net
-    //
-    // Query the status of the server running on the given IP
-    // address.
-    //
-
-    p = M_CheckParmWithArgs("-query", 1);
-
-    if (p)
-    {
-        NET_QueryAddress(myargv[p+1]);
-        exit(0);
-    }
-
-    //!
-    // @category net
-    //
-    // Search the local LAN for running servers.
-    //
-
-    if (M_CheckParm("-localsearch"))
-    {
-        NET_LANQuery();
-        exit(0);
-    }
-
-#endif
-
-    //!
-    // @vanilla
-    //
-    // Disable monsters.
-    //
-	
-    nomonsters = M_CheckParm ("-nomonsters");
-
-    //!
-    // @vanilla
-    //
-    // Monsters respawn after being killed.
-    //
-
-    respawnparm = M_CheckParm ("-respawn");
-
-    //!
-    // @vanilla
-    //
-    // Monsters move faster.
-    //
-
-    fastparm = M_CheckParm ("-fast");
-
-    //! 
-    // @vanilla
-    //
-    // Developer mode.  F1 saves a screenshot in the current working
-    // directory.
-    //
-
-    devparm = M_CheckParm ("-devparm");
-
-    I_DisplayFPSDots(devparm);
-
-    //!
-    // @category net
-    // @vanilla
-    //
-    // Start a deathmatch game.
-    //
-
-    if (M_CheckParm ("-deathmatch"))
-	deathmatch = 1;
-
-    //!
-    // @category net
-    // @vanilla
-    //
-    // Start a deathmatch 2.0 game.  Weapons do not stay in place and
-    // all items respawn after 30 seconds.
-    //
-
-    if (M_CheckParm ("-altdeath"))
-	deathmatch = 2;
-
-    if (devparm)
-	DEH_printf(D_DEVSTR);
-    
-    // find which dir to use for config files
-
-#ifdef _WIN32
-
-    //!
-    // @platform windows
-    // @vanilla
-    //
-    // Save configuration data and savegames in c:\doomdata,
-    // allowing play from CD.
-    //
-
-    if (M_ParmExists("-cdrom"))
-    {
-        printf(D_CDROM);
-
-        M_SetConfigDir("c:\\doomdata\\");
-    }
-    else
-#endif
-    {
-        // Auto-detect the configuration dir.
-
-        M_SetConfigDir(NULL);
-    }
-
-    //!
-    // @arg <x>
-    // @vanilla
-    //
-    // Turbo mode.  The player's speed is multiplied by x%.  If unspecified,
-    // x defaults to 200.  Values are rounded up to 10 and down to 400.
-    //
-
-    if ( (p=M_CheckParm ("-turbo")) )
-    {
-	int     scale = 200;
-	extern int forwardmove[2];
-	extern int sidemove[2];
-	
-	if (p<myargc-1)
-	    scale = atoi (myargv[p+1]);
-	if (scale < 10)
-	    scale = 10;
-	if (scale > 400)
-	    scale = 400;
-        DEH_printf("turbo scale: %i%%\n", scale);
-	forwardmove[0] = forwardmove[0]*scale/100;
-	forwardmove[1] = forwardmove[1]*scale/100;
-	sidemove[0] = sidemove[0]*scale/100;
-	sidemove[1] = sidemove[1]*scale/100;
-    }
-    
-    // init subsystems
-    DEH_printf("V_Init: allocate screens.\n");
-    V_Init ();
-
-    // Load configuration files before initialising other subsystems.
-    DEH_printf("M_LoadDefaults: Load system defaults.\n");
-    M_SetConfigFilenames("default.cfg", PROGRAM_PREFIX "doom.cfg");
-    D_BindVariables();
-    M_LoadDefaults();
-
-    // Save configuration at exit.
-    I_AtExit(M_SaveDefaults, false);
-
-    // Find main IWAD file and load it.
-    iwadfile = D_FindIWAD(IWAD_MASK_DOOM, &gamemission);
-
-    // None found?
-
-    if (iwadfile == NULL)
-    {
-        I_Error("Game mode indeterminate.  No IWAD file was found.  Try\n"
-                "specifying one with the '-iwad' command line parameter.\n");
-    }
-
-    modifiedgame = false;
-
-    DEH_printf("W_Init: Init WADfiles.\n");
-    D_AddFile(iwadfile);
-#if ORIGCODE
-    numiwadlumps = numlumps;
-#endif
-
-    W_CheckCorrectIWAD(doom);
-
-    // Now that we've loaded the IWAD, we can figure out what gamemission
-    // we're playing and which version of Vanilla Doom we need to emulate.
-    D_IdentifyVersion();
-    InitGameVersion();
-
-#if ORIGCODE
-    //!
-    // @category mod
-    //
-    // Disable automatic loading of Dehacked patches for certain
-    // IWAD files.
-    //
-    if (!M_ParmExists("-nodeh"))
-    {
-        // Some IWADs have dehacked patches that need to be loaded for
-        // them to be played properly.
-        LoadIwadDeh();
-    }
-#endif
-
-    // Doom 3: BFG Edition includes modified versions of the classic
-    // IWADs which can be identified by an additional DMENUPIC lump.
-    // Furthermore, the M_GDHIGH lumps have been modified in a way that
-    // makes them incompatible to Vanilla Doom and the modified version
-    // of doom2.wad is missing the TITLEPIC lump.
-    // We specifically check for DMENUPIC here, before PWADs have been
-    // loaded which could probably include a lump of that name.
-
-    if (W_CheckNumForName("dmenupic") >= 0)
-    {
-        printf("BFG Edition: Using workarounds as needed.\n");
-        bfgedition = true;
-
-        // BFG Edition changes the names of the secret levels to
-        // censor the Wolfenstein references. It also has an extra
-        // secret level (MAP33). In Vanilla Doom (meaning the DOS
-        // version), MAP33 overflows into the Plutonia level names
-        // array, so HUSTR_33 is actually PHUSTR_1.
-
-        DEH_AddStringReplacement(HUSTR_31, "level 31: idkfa");
-        DEH_AddStringReplacement(HUSTR_32, "level 32: keen");
-        DEH_AddStringReplacement(PHUSTR_1, "level 33: betray");
-
-        // The BFG edition doesn't have the "low detail" menu option (fair
-        // enough). But bizarrely, it reuses the M_GDHIGH patch as a label
-        // for the options menu (says "Fullscreen:"). Why the perpetrators
-        // couldn't just add a new graphic lump and had to reuse this one,
-        // I don't know.
-        //
-        // The end result is that M_GDHIGH is too wide and causes the game
-        // to crash. As a workaround to get a minimum level of support for
-        // the BFG edition IWADs, use the "ON"/"OFF" graphics instead.
-
-        DEH_AddStringReplacement("M_GDHIGH", "M_MSGON");
-        DEH_AddStringReplacement("M_GDLOW", "M_MSGOFF");
-    }
-
-#ifdef FEATURE_DEHACKED
-    // Load Dehacked patches specified on the command line with -deh.
-    // Note that there's a very careful and deliberate ordering to how
-    // Dehacked patches are loaded. The order we use is:
-    //  1. IWAD dehacked patches.
-    //  2. Command line dehacked patches specified with -deh.
-    //  3. PWAD dehacked patches in DEHACKED lumps.
-    DEH_ParseCommandLine();
-#endif
-
-    // Load PWAD files.
-    modifiedgame = W_ParseCommandLine();
-
-    // Debug:
-//    W_PrintDirectory();
-
-    //!
-    // @arg <demo>
-    // @category demo
-    // @vanilla
-    //
-    // Play back the demo named demo.lmp.
-    //
-
-    p = M_CheckParmWithArgs ("-playdemo", 1);
-
-    if (!p)
-    {
-        //!
-        // @arg <demo>
-        // @category demo
-        // @vanilla
-        //
-        // Play back the demo named demo.lmp, determining the framerate
-        // of the screen.
-        //
-	p = M_CheckParmWithArgs("-timedemo", 1);
-
-    }
-
-    if (p)
-    {
-        // With Vanilla you have to specify the file without extension,
-        // but make that optional.
-        if (M_StringEndsWith(myargv[p + 1], ".lmp"))
-        {
-            M_StringCopy(file, myargv[p + 1], sizeof(file));
-        }
-        else
-        {
-            DEH_snprintf(file, sizeof(file), "%s.lmp", myargv[p+1]);
-        }
-
-        if (D_AddFile(file))
-        {
-            M_StringCopy(demolumpname, lumpinfo[numlumps - 1].name,
-                         sizeof(demolumpname));
-        }
-        else
-        {
-            // If file failed to load, still continue trying to play
-            // the demo in the same way as Vanilla Doom.  This makes
-            // tricks like "-playdemo demo1" possible.
-
-            M_StringCopy(demolumpname, myargv[p + 1], sizeof(demolumpname));
-        }
-
-        printf("Playing demo %s.\n", file);
-    }
-
-    I_AtExit((atexit_func_t) G_CheckDemoStatus, true);
-
-    // Generate the WAD hash table.  Speed things up a bit.
-    W_GenerateHashTable();
-
-    // Load DEHACKED lumps from WAD files - but only if we give the right
-    // command line parameter.
-
-#if ORIGCODE
-    //!
-    // @category mod
-    //
-    // Load Dehacked patches from DEHACKED lumps contained in one of the
-    // loaded PWAD files.
-    //
-    if (M_ParmExists("-dehlump"))
-    {
-        int i, loaded = 0;
-
-        for (i = numiwadlumps; i < numlumps; ++i)
-        {
-            if (!strncmp(lumpinfo[i].name, "DEHACKED", 8))
-            {
-                DEH_LoadLump(i, false, false);
-                loaded++;
-            }
-        }
-
-        printf("  loaded %i DEHACKED lumps from PWAD files.\n", loaded);
-    }
-#endif
-
-    // Set the gamedescription string. This is only possible now that
-    // we've finished loading Dehacked patches.
-    D_SetGameDescription();
-
-#ifdef _WIN32
-    // In -cdrom mode, we write savegames to c:\doomdata as well as configs.
-    if (M_ParmExists("-cdrom"))
-    {
-        savegamedir = configdir;
-    }
-    else
-#endif
-    {
-        savegamedir = M_GetSaveGameDir(D_SaveGameIWADName(gamemission));
-    }
-
-    // Check for -file in shareware
-    if (modifiedgame)
-    {
-	// These are the lumps that will be checked in IWAD,
-	// if any one is not present, execution will be aborted.
-	char name[23][8]=
-	{
-	    "e2m1","e2m2","e2m3","e2m4","e2m5","e2m6","e2m7","e2m8","e2m9",
-	    "e3m1","e3m3","e3m3","e3m4","e3m5","e3m6","e3m7","e3m8","e3m9",
-	    "dphoof","bfgga0","heada1","cybra1","spida1d1"
-	};
-	int i;
-	
-	if ( gamemode == shareware)
-	    I_Error(DEH_String("\nYou cannot -file with the shareware "
-			       "version. Register!"));
-
-	// Check for fake IWAD with right name,
-	// but w/o all the lumps of the registered version. 
-	if (gamemode == registered)
-	    for (i = 0;i < 23; i++)
-		if (W_CheckNumForName(name[i])<0)
-		    I_Error(DEH_String("\nThis is not the registered version."));
-    }
-
-    if (W_CheckNumForName("SS_START") >= 0
-     || W_CheckNumForName("FF_END") >= 0)
-    {
-        I_PrintDivider();
-        printf(" WARNING: The loaded WAD file contains modified sprites or\n"
-               " floor textures.  You may want to use the '-merge' command\n"
-               " line option instead of '-file'.\n");
-    }
-
-    I_PrintStartupBanner(gamedescription);
-    PrintDehackedBanners();
-
-    // Freedoom's IWADs are Boom-compatible, which means they usually
-    // don't work in Vanilla (though FreeDM is okay). Show a warning
-    // message and give a link to the website.
-    if (W_CheckNumForName("FREEDOOM") >= 0 && W_CheckNumForName("FREEDM") < 0)
-    {
-        printf(" WARNING: You are playing using one of the Freedoom IWAD\n"
-               " files, which might not work in this port. See this page\n"
-               " for more information on how to play using Freedoom:\n"
-               "   http://www.chocolate-doom.org/wiki/index.php/Freedoom\n");
-        I_PrintDivider();
-    }
-
-    DEH_printf("I_Init: Setting up machine state.\n");
-    I_CheckIsScreensaver();
-    I_InitTimer();
-    I_InitJoystick();
-    I_InitSound(true);
-    I_InitMusic();
-
-#ifdef FEATURE_MULTIPLAYER
-    printf ("NET_Init: Init network subsystem.\n");
-    NET_Init ();
-#endif
-
-    // Initial netgame startup. Connect to server etc.
-    D_ConnectNetGame();
-
-    // get skill / episode / map from parms
-    startskill = sk_medium;
-    startepisode = 1;
-    startmap = 1;
-    autostart = false;
-
-    //!
-    // @arg <skill>
-    // @vanilla
-    //
-    // Set the game skill, 1-5 (1: easiest, 5: hardest).  A skill of
-    // 0 disables all monsters.
-    //
-
-    p = M_CheckParmWithArgs("-skill", 1);
-
-    if (p)
-    {
-	startskill = myargv[p+1][0]-'1';
-	autostart = true;
-    }
-
-    //!
-    // @arg <n>
-    // @vanilla
-    //
-    // Start playing on episode n (1-4)
-    //
-
-    p = M_CheckParmWithArgs("-episode", 1);
-
-    if (p)
-    {
-	startepisode = myargv[p+1][0]-'0';
-	startmap = 1;
-	autostart = true;
-    }
-	
-    timelimit = 0;
-
-    //! 
-    // @arg <n>
-    // @category net
-    // @vanilla
-    //
-    // For multiplayer games: exit each level after n minutes.
-    //
-
-    p = M_CheckParmWithArgs("-timer", 1);
-
-    if (p)
-    {
-	timelimit = atoi(myargv[p+1]);
-    }
-
-    //!
-    // @category net
-    // @vanilla
-    //
-    // Austin Virtual Gaming: end levels after 20 minutes.
-    //
-
-    p = M_CheckParm ("-avg");
-
-    if (p)
-    {
-	timelimit = 20;
-    }
-
-    //!
-    // @arg [<x> <y> | <xy>]
-    // @vanilla
-    //
-    // Start a game immediately, warping to ExMy (Doom 1) or MAPxy
-    // (Doom 2)
-    //
-
-    p = M_CheckParmWithArgs("-warp", 1);
-
-    if (p)
-    {
-        if (gamemode == commercial)
-            startmap = atoi (myargv[p+1]);
-        else
-        {
-            startepisode = myargv[p+1][0]-'0';
-
-            if (p + 2 < myargc)
-            {
-                startmap = myargv[p+2][0]-'0';
-            }
-            else
-            {
-                startmap = 1;
-            }
-        }
-        autostart = true;
-    }
-
-    // Undocumented:
-    // Invoked by setup to test the controls.
-
-    p = M_CheckParm("-testcontrols");
-
-    if (p > 0)
-    {
-        startepisode = 1;
-        startmap = 1;
-        autostart = true;
-        testcontrols = true;
-    }
-
-    // Check for load game parameter
-    // We do this here and save the slot number, so that the network code
-    // can override it or send the load slot to other players.
-
-    //!
-    // @arg <s>
-    // @vanilla
-    //
-    // Load the game in slot s.
-    //
-
-    p = M_CheckParmWithArgs("-loadgame", 1);
-    
-    if (p)
-    {
-        startloadgame = atoi(myargv[p+1]);
-    }
-    else
-    {
-        // Not loading a game
-        startloadgame = -1;
-    }
-
-    DEH_printf("M_Init: Init miscellaneous info.\n");
-    M_Init ();
-
-    DEH_printf("R_Init: Init DOOM refresh daemon - ");
-    R_Init ();
-
-    DEH_printf("\nP_Init: Init Playloop state.\n");
-    P_Init ();
-
-    DEH_printf("S_Init: Setting up sound.\n");
-    S_Init (sfxVolume * 8, musicVolume * 8);
-
-    DEH_printf("D_CheckNetGame: Checking network game status.\n");
-    D_CheckNetGame ();
-
-    PrintGameVersion();
-
-    DEH_printf("HU_Init: Setting up heads up display.\n");
-    HU_Init ();
-
-    DEH_printf("ST_Init: Init status bar.\n");
-    ST_Init ();
-
-    // If Doom II without a MAP01 lump, this is a store demo.
-    // Moved this here so that MAP01 isn't constantly looked up
-    // in the main loop.
-
-    if (gamemode == commercial && W_CheckNumForName("map01") < 0)
-        storedemo = true;
-
-    if (M_CheckParmWithArgs("-statdump", 1))
-    {
-        I_AtExit(StatDump, true);
-        DEH_printf("External statistics registered.\n");
-    }
-
-    //!
-    // @arg <x>
-    // @category demo
-    // @vanilla
-    //
-    // Record a demo named x.lmp.
-    //
-
-    p = M_CheckParmWithArgs("-record", 1);
-
-    if (p)
     {
 		G_RecordDemo (myargv[p+1]);
 		autostart = true;
@@ -14032,188 +13430,7 @@ void doomgeneric_Create(int argc, char **argv)
 // of the License, or (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//	Put all global tate variables here.
-//
-
-// sys include stripped
-
-// include stripped
-
-
-// Game Mode - identify IWAD as shareware, retail etc.
-GameMode_t gamemode = indetermined;
-GameMission_t	gamemission = doom;
-GameVersion_t   gameversion = exe_final2;
-char *gamedescription;
-
-// Set if homebrew PWAD stuff has been added.
-boolean	modifiedgame;
-
-
-
-
-
-// --- dstrings.c ---
-//
-// Copyright(C) 1993-1996 Id Software, Inc.
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//	Globally defined strings.
-// 
-
-
-
-// include stripped
-
-char *doom1_endmsg[] =
-{
-  "are you sure you want to\nquit this great game?",
-  "please don't leave, there's more\ndemons to toast!",
-  "let's beat it -- this is turning\ninto a bloodbath!",
-  "i wouldn't leave if i were you.\ndos is much worse.",
-  "you're trying to say you like dos\nbetter than me, right?",
-  "don't leave yet -- there's a\ndemon around that corner!",
-  "ya know, next time you come in here\ni'm gonna toast ya.",
-  "go ahead and leave. see if i care.",
-};
-
-char *doom2_endmsg[] =
-{
-  // QuitDOOM II messages
-  "are you sure you want to\nquit this great game?",
-  "you want to quit?\nthen, thou hast lost an eighth!",
-  "don't go now, there's a \ndimensional shambler waiting\nat the dos prompt!",
-  "get outta here and go back\nto your boring programs.",
-  "if i were your boss, i'd \n deathmatch ya in a minute!",
-  "look, bud. you leave now\nand you forfeit your body count!",
-  "just leave. when you come\nback, i'll be waiting with a bat.",
-  "you're lucky i don't smack\nyou for thinking about leaving.",
-};
-
-#if 0
-
-// UNUSED messages included in the source release
-
-char* endmsg[] =
-{
-  // DOOM1
-  QUITMSG,
-  // FinalDOOM?
-  "fuck you, pussy!\nget the fuck out!",
-  "you quit and i'll jizz\nin your cystholes!",
-  "if you leave, i'll make\nthe lord drink my jizz.",
-  "hey, ron! can we say\n'fuck' in the game?",
-  "i'd leave: this is just\nmore monsters and levels.\nwhat a load.",
-  "suck it down, asshole!\nyou're a fucking wimp!",
-  "don't quit now! we're \nstill spending your money!",
-
-  // Internal debug. Different style, too.
-  "THIS IS NO MESSAGE!\nPage intentionally left blank."
-};
-
-#endif
-
-  
-
-
-
-// --- dummy.c ---
-/*
- * dummy.c
- *
- *  Created on: 16.02.2015
- *      Author: Florian
- */
-
-
-/*---------------------------------------------------------------------*
- *  include files                                                      *
- *---------------------------------------------------------------------*/
-
-// include stripped
-
-/*---------------------------------------------------------------------*
- *  local definitions                                                  *
- *---------------------------------------------------------------------*/
-
-/*---------------------------------------------------------------------*
- *  external declarations                                              *
- *---------------------------------------------------------------------*/
-
-/*---------------------------------------------------------------------*
- *  public data                                                        *
- *---------------------------------------------------------------------*/
-
-boolean net_client_connected = false;
-
-boolean drone = false;
-
-/*---------------------------------------------------------------------*
- *  private data                                                       *
- *---------------------------------------------------------------------*/
-
-/*---------------------------------------------------------------------*
- *  private functions                                                  *
- *---------------------------------------------------------------------*/
-
-/*---------------------------------------------------------------------*
- *  public functions                                                   *
- *---------------------------------------------------------------------*/
-
-#ifndef FEATURE_SOUND
-
-void I_InitTimidityConfig(void)
-{
-}
-
-#endif
-
-/*---------------------------------------------------------------------*
- *  eof                                                                *
- *---------------------------------------------------------------------*/
-
-// --- g_game.c ---
-//
-// Copyright(C) 1993-1996 Id Software, Inc.
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:  none
-//
-
-
-
-// sys include stripped
-// sys include stripped
-// sys include stripped
-
-// include stripped 
-// include stripped
+// but WITHOUT ANY WARRANTY; wi
 // include stripped
 
 // include stripped
@@ -14831,7 +14048,7 @@ void G_DoLoadLevel (void)
     levelstarttic = gametic;        // for time calculation
     
     if (wipegamestate == GS_LEVEL) 
-	wipegamestate = -1;             // force a wipe 
+	wipegamestate = (gamestate_t) -1;             // force a wipe 
 
     gamestate = GS_LEVEL; 
 
@@ -15028,240 +14245,6 @@ boolean G_Responder (event_t* ev)
 	joyymove = ev->data3; 
         joystrafemove = ev->data4;
 	return true;    // eat events 
- 
-      default: 
-	break; 
-    } 
- 
-    return false; 
-} 
- 
- 
- 
-//
-// G_Ticker
-// Make ticcmd_ts for the players.
-//
-void G_Ticker (void) 
-{ 
-    int		i;
-    int		buf; 
-    ticcmd_t*	cmd;
-    
-    // do player reborns if needed
-    for (i=0 ; i<MAXPLAYERS ; i++) 
-	if (playeringame[i] && players[i].playerstate == PST_REBORN) 
-	    G_DoReborn (i);
-    
-    // do things to change the game state
-    while (gameaction != ga_nothing) 
-    { 
-	switch (gameaction) 
-	{ 
-	  case ga_loadlevel: 
-	    G_DoLoadLevel (); 
-	    break; 
-	  case ga_newgame: 
-	    G_DoNewGame (); 
-	    break; 
-	  case ga_loadgame: 
-	    G_DoLoadGame (); 
-	    break; 
-	  case ga_savegame: 
-	    G_DoSaveGame (); 
-	    break; 
-	  case ga_playdemo: 
-	    G_DoPlayDemo (); 
-	    break; 
-	  case ga_completed: 
-	    G_DoCompleted (); 
-	    break; 
-	  case ga_victory: 
-	    F_StartFinale (); 
-	    break; 
-	  case ga_worlddone: 
-	    G_DoWorldDone (); 
-	    break; 
-	  case ga_screenshot: 
-	    V_ScreenShot("DOOM%02i.%s"); 
-            players[consoleplayer].message = DEH_String("screen shot");
-	    gameaction = ga_nothing; 
-	    break; 
-	  case ga_nothing: 
-	    break; 
-	} 
-    }
-    
-    // get commands, check consistancy,
-    // and build new consistancy check
-    buf = (gametic/ticdup)%BACKUPTICS; 
- 
-    for (i=0 ; i<MAXPLAYERS ; i++)
-    {
-	if (playeringame[i]) 
-	{ 
-	    cmd = &players[i].cmd; 
-
-	    memcpy(cmd, &netcmds[i], sizeof(ticcmd_t));
-
-	    if (demoplayback) 
-		G_ReadDemoTiccmd (cmd); 
-	    if (demorecording) 
-		G_WriteDemoTiccmd (cmd);
-	    
-	    // check for turbo cheats
-
-            // check ~ 4 seconds whether to display the turbo message. 
-            // store if the turbo threshold was exceeded in any tics
-            // over the past 4 seconds.  offset the checking period
-            // for each player so messages are not displayed at the
-            // same time.
-
-            if (cmd->forwardmove > TURBOTHRESHOLD)
-            {
-                turbodetected[i] = true;
-            }
-
-            if ((gametic & 31) == 0 
-             && ((gametic >> 5) % MAXPLAYERS) == i
-             && turbodetected[i])
-            {
-                static char turbomessage[80];
-                extern char *player_names[4];
-                M_snprintf(turbomessage, sizeof(turbomessage),
-                           "%s is turbo!", player_names[i]);
-                players[consoleplayer].message = turbomessage;
-                turbodetected[i] = false;
-            }
-
-	    if (netgame && !netdemo && !(gametic%ticdup) ) 
-	    { 
-		if (gametic > BACKUPTICS 
-		    && consistancy[i][buf] != cmd->consistancy) 
-		{ 
-		    I_Error ("consistency failure (%i should be %i)",
-			     cmd->consistancy, consistancy[i][buf]); 
-		} 
-		if (players[i].mo) 
-		    consistancy[i][buf] = players[i].mo->x; 
-		else 
-		    consistancy[i][buf] = rndindex; 
-	    } 
-	}
-    }
-    
-    // check for special buttons
-    for (i=0 ; i<MAXPLAYERS ; i++)
-    {
-	if (playeringame[i]) 
-	{ 
-	    if (players[i].cmd.buttons & BT_SPECIAL) 
-	    { 
-		switch (players[i].cmd.buttons & BT_SPECIALMASK) 
-		{ 
-		  case BTS_PAUSE: 
-		    paused ^= 1; 
-		    if (paused) 
-			S_PauseSound (); 
-		    else 
-			S_ResumeSound (); 
-		    break; 
-					 
-		  case BTS_SAVEGAME:
-		    if (!savedescription[0]) 
-                    {
-                        M_StringCopy(savedescription, "NET GAME",
-                                     sizeof(savedescription));
-                    }
-
-		    savegameslot =  
-			(players[i].cmd.buttons & BTS_SAVEMASK)>>BTS_SAVESHIFT; 
-		    gameaction = ga_savegame; 
-		    break; 
-		} 
-	    } 
-	}
-    }
-
-    // Have we just finished displaying an intermission screen?
-
-    if (oldgamestate == GS_INTERMISSION && gamestate != GS_INTERMISSION)
-    {
-        WI_End();
-    }
-
-    oldgamestate = gamestate;
-    
-    // do main actions
-    switch (gamestate) 
-    { 
-      case GS_LEVEL: 
-	P_Ticker (); 
-	ST_Ticker (); 
-	AM_Ticker (); 
-	HU_Ticker ();            
-	break; 
-	 
-      case GS_INTERMISSION: 
-	WI_Ticker (); 
-	break; 
-			 
-      case GS_FINALE: 
-	F_Ticker (); 
-	break; 
- 
-      case GS_DEMOSCREEN: 
-	D_PageTicker (); 
-	break;
-    }        
-} 
- 
- 
-//
-// PLAYER STRUCTURE FUNCTIONS
-// also see P_SpawnPlayer in P_Things
-//
-
-//
-// G_InitPlayer 
-// Called at the start.
-// Called by the game initialization functions.
-//
-void G_InitPlayer (int player) 
-{
-    // clear everything else to defaults
-    G_PlayerReborn (player); 
-}
- 
- 
-
-//
-// G_PlayerFinishLevel
-// Can when a player completes a level.
-//
-void G_PlayerFinishLevel (int player) 
-{ 
-    player_t*	p; 
-	 
-    p = &players[player]; 
-	 
-    memset (p->powers, 0, sizeof (p->powers)); 
-    memset (p->cards, 0, sizeof (p->cards)); 
-    p->mo->flags &= ~MF_SHADOW;		// cancel invisibility 
-    p->extralight = 0;			// cancel gun flashes 
-    p->fixedcolormap = 0;		// cancel ir gogles 
-    p->damagecount = 0;			// no palette changes 
-    p->bonuscount = 0; 
-} 
- 
-
-//
-// G_PlayerReborn
-// Called after a player dies 
-// almost everything is cleared and initialized 
-//
-void G_PlayerReborn (int player) 
-{ 
     player_t*	p; 
     int		i; 
     int		frags[MAXPLAYERS]; 
@@ -15302,1004 +14285,6 @@ void G_PlayerReborn (int player)
 // because something is occupying it 
 //
 void P_SpawnPlayer (mapthing_t* mthing); 
- 
-boolean
-G_CheckSpot
-( int		playernum,
-  mapthing_t*	mthing ) 
-{ 
-    fixed_t		x;
-    fixed_t		y; 
-    subsector_t*	ss; 
-    mobj_t*		mo; 
-    int			i;
-	
-    if (!players[playernum].mo)
-    {
-	// first spawn of level, before corpses
-	for (i=0 ; i<playernum ; i++)
-	    if (players[i].mo->x == mthing->x << FRACBITS
-		&& players[i].mo->y == mthing->y << FRACBITS)
-		return false;	
-	return true;
-    }
-		
-    x = mthing->x << FRACBITS; 
-    y = mthing->y << FRACBITS; 
-	 
-    if (!P_CheckPosition (players[playernum].mo, x, y) ) 
-	return false; 
- 
-    // flush an old corpse if needed 
-    if (bodyqueslot >= BODYQUESIZE) 
-	P_RemoveMobj (bodyque[bodyqueslot%BODYQUESIZE]); 
-    bodyque[bodyqueslot%BODYQUESIZE] = players[playernum].mo; 
-    bodyqueslot++; 
-
-    // spawn a teleport fog
-    ss = R_PointInSubsector (x,y);
-
-
-    // The code in the released source looks like this:
-    //
-    //    an = ( ANG45 * (((unsigned int) mthing->angle)/45) )
-    //         >> ANGLETOFINESHIFT;
-    //    mo = P_SpawnMobj (x+20*finecosine[an], y+20*finesine[an]
-    //                     , ss->sector->floorheight
-    //                     , MT_TFOG);
-    //
-    // But 'an' can be a signed value in the DOS version. This means that
-    // we get a negative index and the lookups into finecosine/finesine
-    // end up dereferencing values in finetangent[].
-    // A player spawning on a deathmatch start facing directly west spawns
-    // "silently" with no spawn fog. Emulate this.
-    //
-    // This code is imported from PrBoom+.
-
-    {
-        fixed_t xa, ya;
-        signed int an;
-
-        // This calculation overflows in Vanilla Doom, but here we deliberately
-        // avoid integer overflow as it is undefined behavior, so the value of
-        // 'an' will always be positive.
-        an = (ANG45 >> ANGLETOFINESHIFT) * ((signed int) mthing->angle / 45);
-
-        switch (an)
-        {
-            case 4096:  // -4096:
-                xa = finetangent[2048];    // finecosine[-4096]
-                ya = finetangent[0];       // finesine[-4096]
-                break;
-            case 5120:  // -3072:
-                xa = finetangent[3072];    // finecosine[-3072]
-                ya = finetangent[1024];    // finesine[-3072]
-                break;
-            case 6144:  // -2048:
-                xa = finesine[0];          // finecosine[-2048]
-                ya = finetangent[2048];    // finesine[-2048]
-                break;
-            case 7168:  // -1024:
-                xa = finesine[1024];       // finecosine[-1024]
-                ya = finetangent[3072];    // finesine[-1024]
-                break;
-            case 0:
-            case 1024:
-            case 2048:
-            case 3072:
-                xa = finecosine[an];
-                ya = finesine[an];
-                break;
-            default:
-                I_Error("G_CheckSpot: unexpected angle %d\n", an);
-                xa = ya = 0;
-                break;
-        }
-        mo = P_SpawnMobj(x + 20 * xa, y + 20 * ya,
-                         ss->sector->floorheight, MT_TFOG);
-    }
-
-    if (players[consoleplayer].viewz != 1) 
-	S_StartSound (mo, sfx_telept);	// don't start sound on first frame 
- 
-    return true; 
-} 
-
-
-//
-// G_DeathMatchSpawnPlayer 
-// Spawns a player at one of the random death match spots 
-// called at level load and each death 
-//
-void G_DeathMatchSpawnPlayer (int playernum) 
-{ 
-    int             i,j; 
-    int				selections; 
-	 
-    selections = deathmatch_p - deathmatchstarts; 
-    if (selections < 4) 
-	I_Error ("Only %i deathmatch spots, 4 required", selections); 
- 
-    for (j=0 ; j<20 ; j++) 
-    { 
-	i = P_Random() % selections; 
-	if (G_CheckSpot (playernum, &deathmatchstarts[i]) ) 
-	{ 
-	    deathmatchstarts[i].type = playernum+1; 
-	    P_SpawnPlayer (&deathmatchstarts[i]); 
-	    return; 
-	} 
-    } 
- 
-    // no good spot, so the player will probably get stuck 
-    P_SpawnPlayer (&playerstarts[playernum]); 
-} 
-
-//
-// G_DoReborn 
-// 
-void G_DoReborn (int playernum) 
-{ 
-    int                             i; 
-	 
-    if (!netgame)
-    {
-	// reload the level from scratch
-	gameaction = ga_loadlevel;  
-    }
-    else 
-    {
-	// respawn at the start
-
-	// first dissasociate the corpse 
-	players[playernum].mo->player = NULL;   
-		 
-	// spawn at random spot if in death match 
-	if (deathmatch) 
-	{ 
-	    G_DeathMatchSpawnPlayer (playernum); 
-	    return; 
-	} 
-		 
-	if (G_CheckSpot (playernum, &playerstarts[playernum]) ) 
-	{ 
-	    P_SpawnPlayer (&playerstarts[playernum]); 
-	    return; 
-	}
-	
-	// try to spawn at one of the other players spots 
-	for (i=0 ; i<MAXPLAYERS ; i++)
-	{
-	    if (G_CheckSpot (playernum, &playerstarts[i]) ) 
-	    { 
-		playerstarts[i].type = playernum+1;	// fake as other player 
-		P_SpawnPlayer (&playerstarts[i]); 
-		playerstarts[i].type = i+1;		// restore 
-		return; 
-	    }	    
-	    // he's going to be inside something.  Too bad.
-	}
-	P_SpawnPlayer (&playerstarts[playernum]); 
-    } 
-} 
- 
- 
-void G_ScreenShot (void) 
-{ 
-    gameaction = ga_screenshot; 
-} 
- 
-
-
-// DOOM Par Times
-int pars[4][10] = 
-{ 
-    {0}, 
-    {0,30,75,120,90,165,180,180,30,165}, 
-    {0,90,90,90,120,90,360,240,30,170}, 
-    {0,90,45,90,150,90,90,165,30,135} 
-}; 
-
-// DOOM II Par Times
-int cpars[32] =
-{
-    30,90,120,120,90,150,120,120,270,90,	//  1-10
-    210,150,150,150,210,150,420,150,210,150,	// 11-20
-    240,150,180,150,150,300,330,420,300,180,	// 21-30
-    120,30					// 31-32
-};
- 
-
-//
-// G_DoCompleted 
-//
-boolean		secretexit; 
-extern char*	pagename; 
- 
-void G_ExitLevel (void) 
-{ 
-    secretexit = false; 
-    gameaction = ga_completed; 
-} 
-
-// Here's for the german edition.
-void G_SecretExitLevel (void) 
-{ 
-    // IF NO WOLF3D LEVELS, NO SECRET EXIT!
-    if ( (gamemode == commercial)
-      && (W_CheckNumForName("map31")<0))
-	secretexit = false;
-    else
-	secretexit = true; 
-    gameaction = ga_completed; 
-} 
- 
-void G_DoCompleted (void) 
-{ 
-    int             i; 
-	 
-    gameaction = ga_nothing; 
- 
-    for (i=0 ; i<MAXPLAYERS ; i++) 
-	if (playeringame[i]) 
-	    G_PlayerFinishLevel (i);        // take away cards and stuff 
-	 
-    if (automapactive) 
-	AM_Stop (); 
-	
-    if (gamemode != commercial)
-    {
-        // Chex Quest ends after 5 levels, rather than 8.
-
-        if (gameversion == exe_chex)
-        {
-            if (gamemap == 5)
-            {
-                gameaction = ga_victory;
-                return;
-            }
-        }
-        else
-        {
-            switch(gamemap)
-            {
-              case 8:
-                gameaction = ga_victory;
-                return;
-              case 9: 
-                for (i=0 ; i<MAXPLAYERS ; i++) 
-                    players[i].didsecret = true; 
-                break;
-            }
-        }
-    }
-
-//#if 0  Hmmm - why?
-    if ( (gamemap == 8)
-	 && (gamemode != commercial) ) 
-    {
-	// victory 
-	gameaction = ga_victory; 
-	return; 
-    } 
-	 
-    if ( (gamemap == 9)
-	 && (gamemode != commercial) ) 
-    {
-	// exit secret level 
-	for (i=0 ; i<MAXPLAYERS ; i++) 
-	    players[i].didsecret = true; 
-    } 
-//#endif
-    
-	 
-    wminfo.didsecret = players[consoleplayer].didsecret; 
-    wminfo.epsd = gameepisode -1; 
-    wminfo.last = gamemap -1;
-    
-    // wminfo.next is 0 biased, unlike gamemap
-    if ( gamemode == commercial)
-    {
-	if (secretexit)
-	    switch(gamemap)
-	    {
-	      case 15: wminfo.next = 30; break;
-	      case 31: wminfo.next = 31; break;
-	    }
-	else
-	    switch(gamemap)
-	    {
-	      case 31:
-	      case 32: wminfo.next = 15; break;
-	      default: wminfo.next = gamemap;
-	    }
-    }
-    else
-    {
-	if (secretexit) 
-	    wminfo.next = 8; 	// go to secret level 
-	else if (gamemap == 9) 
-	{
-	    // returning from secret level 
-	    switch (gameepisode) 
-	    { 
-	      case 1: 
-		wminfo.next = 3; 
-		break; 
-	      case 2: 
-		wminfo.next = 5; 
-		break; 
-	      case 3: 
-		wminfo.next = 6; 
-		break; 
-	      case 4:
-		wminfo.next = 2;
-		break;
-	    }                
-	} 
-	else 
-	    wminfo.next = gamemap;          // go to next level 
-    }
-		 
-    wminfo.maxkills = totalkills; 
-    wminfo.maxitems = totalitems; 
-    wminfo.maxsecret = totalsecret; 
-    wminfo.maxfrags = 0; 
-
-    // Set par time. Doom episode 4 doesn't have a par time, so this
-    // overflows into the cpars array. It's necessary to emulate this
-    // for statcheck regression testing.
-    if (gamemode == commercial)
-	wminfo.partime = TICRATE*cpars[gamemap-1];
-    else if (gameepisode < 4)
-	wminfo.partime = TICRATE*pars[gameepisode][gamemap];
-    else
-        wminfo.partime = TICRATE*cpars[gamemap];
-
-    wminfo.pnum = consoleplayer; 
- 
-    for (i=0 ; i<MAXPLAYERS ; i++) 
-    { 
-	wminfo.plyr[i].in = playeringame[i]; 
-	wminfo.plyr[i].skills = players[i].killcount; 
-	wminfo.plyr[i].sitems = players[i].itemcount; 
-	wminfo.plyr[i].ssecret = players[i].secretcount; 
-	wminfo.plyr[i].stime = leveltime; 
-	memcpy (wminfo.plyr[i].frags, players[i].frags 
-		, sizeof(wminfo.plyr[i].frags)); 
-    } 
- 
-    gamestate = GS_INTERMISSION; 
-    viewactive = false; 
-    automapactive = false; 
-
-    StatCopy(&wminfo);
- 
-    WI_Start (&wminfo); 
-} 
-
-
-//
-// G_WorldDone 
-//
-void G_WorldDone (void) 
-{ 
-    gameaction = ga_worlddone; 
-
-    if (secretexit) 
-	players[consoleplayer].didsecret = true; 
-
-    if ( gamemode == commercial )
-    {
-	switch (gamemap)
-	{
-	  case 15:
-	  case 31:
-	    if (!secretexit)
-		break;
-	  case 6:
-	  case 11:
-	  case 20:
-	  case 30:
-	    F_StartFinale ();
-	    break;
-	}
-    }
-} 
- 
-void G_DoWorldDone (void) 
-{        
-    gamestate = GS_LEVEL; 
-    gamemap = wminfo.next+1; 
-    G_DoLoadLevel (); 
-    gameaction = ga_nothing; 
-    viewactive = true; 
-} 
- 
-
-
-//
-// G_InitFromSavegame
-// Can be called by the startup code or the menu task. 
-//
-extern boolean setsizeneeded;
-void R_ExecuteSetViewSize (void);
-
-char	savename[256];
-
-void G_LoadGame (char* name) 
-{ 
-    M_StringCopy(savename, name, sizeof(savename));
-    gameaction = ga_loadgame; 
-} 
- 
-#define VERSIONSIZE		16 
-
-
-void G_DoLoadGame (void) 
-{
-    int savedleveltime;
-	 
-    gameaction = ga_nothing; 
-	 
-    save_stream = fopen(savename, "rb");
-
-    if (save_stream == NULL)
-    {
-    	return;
-    }
-
-    savegame_error = false;
-
-    if (!P_ReadSaveGameHeader())
-    {
-        fclose(save_stream);
-        return;
-    }
-
-    savedleveltime = leveltime;
-    
-    // load a base level 
-    G_InitNew (gameskill, gameepisode, gamemap); 
- 
-    leveltime = savedleveltime;
-
-    // dearchive all the modifications
-    P_UnArchivePlayers (); 
-    P_UnArchiveWorld (); 
-    P_UnArchiveThinkers (); 
-    P_UnArchiveSpecials (); 
- 
-    if (!P_ReadSaveGameEOF())
-	I_Error ("Bad savegame");
-
-    fclose(save_stream);
-    
-    if (setsizeneeded)
-    	R_ExecuteSetViewSize ();
-    
-    // draw the pattern into the back screen
-    R_FillBackScreen (); 
-} 
- 
-
-//
-// G_SaveGame
-// Called by the menu task.
-// Description is a 24 byte text string 
-//
-void
-G_SaveGame
-( int	slot,
-  char*	description )
-{
-    savegameslot = slot;
-    M_StringCopy(savedescription, description, sizeof(savedescription));
-    sendsave = true;
-}
-
-void G_DoSaveGame (void) 
-{ 
-    char *savegame_file;
-    char *temp_savegame_file;
-    char *recovery_savegame_file;
-
-    recovery_savegame_file = NULL;
-    temp_savegame_file = P_TempSaveGameFile();
-    savegame_file = P_SaveGameFile(savegameslot);
-
-    // Open the savegame file for writing.  We write to a temporary file
-    // and then rename it at the end if it was successfully written.
-    // This prevents an existing savegame from being overwritten by 
-    // a corrupted one, or if a savegame buffer overrun occurs.
-    save_stream = fopen(temp_savegame_file, "wb");
-
-    if (save_stream == NULL)
-    {
-        // Failed to save the game, so we're going to have to abort. But
-        // to be nice, save to somewhere else before we call I_Error().
-        recovery_savegame_file = M_TempFile("recovery.dsg");
-        save_stream = fopen(recovery_savegame_file, "wb");
-        if (save_stream == NULL)
-        {
-            I_Error("Failed to open either '%s' or '%s' to write savegame.",
-                    temp_savegame_file, recovery_savegame_file);
-        }
-    }
-
-    savegame_error = false;
-
-    P_WriteSaveGameHeader(savedescription);
- 
-    P_ArchivePlayers (); 
-    P_ArchiveWorld (); 
-    P_ArchiveThinkers (); 
-    P_ArchiveSpecials (); 
-	 
-    P_WriteSaveGameEOF();
-	 
-    // Enforce the same savegame size limit as in Vanilla Doom, 
-    // except if the vanilla_savegame_limit setting is turned off.
-
-    if (vanilla_savegame_limit && ftell(save_stream) > SAVEGAMESIZE)
-    {
-        I_Error ("Savegame buffer overrun");
-    }
-    
-    // Finish up, close the savegame file.
-
-    fclose(save_stream);
-
-    if (recovery_savegame_file != NULL)
-    {
-        // We failed to save to the normal location, but we wrote a
-        // recovery file to the temp directory. Now we can bomb out
-        // with an error.
-        I_Error("Failed to open savegame file '%s' for writing.\n"
-                "But your game has been saved to '%s' for recovery.",
-                temp_savegame_file, recovery_savegame_file);
-    }
-
-    // Now rename the temporary savegame file to the actual savegame
-    // file, overwriting the old savegame if there was one there.
-
-    remove(savegame_file);
-    rename(temp_savegame_file, savegame_file);
-    
-    gameaction = ga_nothing;
-    M_StringCopy(savedescription, "", sizeof(savedescription));
-
-    players[consoleplayer].message = DEH_String(GGSAVED);
-
-    // draw the pattern into the back screen
-    R_FillBackScreen ();	
-} 
- 
-
-//
-// G_InitNew
-// Can be called by the startup code or the menu task,
-// consoleplayer, displayplayer, playeringame[] should be set. 
-//
-skill_t	d_skill; 
-int     d_episode; 
-int     d_map; 
- 
-void
-G_DeferedInitNew
-( skill_t	skill,
-  int		episode,
-  int		map) 
-{ 
-    d_skill = skill; 
-    d_episode = episode; 
-    d_map = map; 
-    gameaction = ga_newgame; 
-} 
-
-
-void G_DoNewGame (void) 
-{
-    demoplayback = false; 
-    netdemo = false;
-    netgame = false;
-    deathmatch = false;
-    playeringame[1] = playeringame[2] = playeringame[3] = 0;
-    respawnparm = false;
-    fastparm = false;
-    nomonsters = false;
-    consoleplayer = 0;
-    G_InitNew (d_skill, d_episode, d_map); 
-    gameaction = ga_nothing; 
-} 
-
-
-void
-G_InitNew
-( skill_t	skill,
-  int		episode,
-  int		map )
-{
-    char *skytexturename;
-    int             i;
-
-    if (paused)
-    {
-	paused = false;
-	S_ResumeSound ();
-    }
-
-    /*
-    // Note: This commented-out block of code was added at some point
-    // between the DOS version(s) and the Doom source release. It isn't
-    // found in disassemblies of the DOS version and causes IDCLEV and
-    // the -warp command line parameter to behave differently.
-    // This is left here for posterity.
-
-    // This was quite messy with SPECIAL and commented parts.
-    // Supposedly hacks to make the latest edition work.
-    // It might not work properly.
-    if (episode < 1)
-      episode = 1;
-
-    if ( gamemode == retail )
-    {
-      if (episode > 4)
-	episode = 4;
-    }
-    else if ( gamemode == shareware )
-    {
-      if (episode > 1)
-	   episode = 1;	// only start episode 1 on shareware
-    }
-    else
-    {
-      if (episode > 3)
-	episode = 3;
-    }
-    */
-
-    if (skill > sk_nightmare)
-	skill = sk_nightmare;
-
-    if (gameversion >= exe_ultimate)
-    {
-        if (episode == 0)
-        {
-            episode = 4;
-        }
-    }
-    else
-    {
-        if (episode < 1)
-        {
-            episode = 1;
-        }
-        if (episode > 3)
-        {
-            episode = 3;
-        }
-    }
-
-    if (episode > 1 && gamemode == shareware)
-    {
-        episode = 1;
-    }
-
-    if (map < 1)
-	map = 1;
-
-    if ( (map > 9)
-	 && ( gamemode != commercial) )
-      map = 9;
-
-    M_ClearRandom ();
-
-    if (skill == sk_nightmare || respawnparm )
-	respawnmonsters = true;
-    else
-	respawnmonsters = false;
-
-    if (fastparm || (skill == sk_nightmare && gameskill != sk_nightmare) )
-    {
-	for (i=S_SARG_RUN1 ; i<=S_SARG_PAIN2 ; i++)
-	    states[i].tics >>= 1;
-	mobjinfo[MT_BRUISERSHOT].speed = 20*FRACUNIT;
-	mobjinfo[MT_HEADSHOT].speed = 20*FRACUNIT;
-	mobjinfo[MT_TROOPSHOT].speed = 20*FRACUNIT;
-    }
-    else if (skill != sk_nightmare && gameskill == sk_nightmare)
-    {
-	for (i=S_SARG_RUN1 ; i<=S_SARG_PAIN2 ; i++)
-	    states[i].tics <<= 1;
-	mobjinfo[MT_BRUISERSHOT].speed = 15*FRACUNIT;
-	mobjinfo[MT_HEADSHOT].speed = 10*FRACUNIT;
-	mobjinfo[MT_TROOPSHOT].speed = 10*FRACUNIT;
-    }
-
-    // force players to be initialized upon first level load
-    for (i=0 ; i<MAXPLAYERS ; i++)
-	players[i].playerstate = PST_REBORN;
-
-    usergame = true;                // will be set false if a demo
-    paused = false;
-    demoplayback = false;
-    automapactive = false;
-    viewactive = true;
-    gameepisode = episode;
-    gamemap = map;
-    gameskill = skill;
-
-    viewactive = true;
-
-    // Set the sky to use.
-    //
-    // Note: This IS broken, but it is how Vanilla Doom behaves.
-    // See http://doomwiki.org/wiki/Sky_never_changes_in_Doom_II.
-    //
-    // Because we set the sky here at the start of a game, not at the
-    // start of a level, the sky texture never changes unless we
-    // restore from a saved game.  This was fixed before the Doom
-    // source release, but this IS the way Vanilla DOS Doom behaves.
-
-    if (gamemode == commercial)
-    {
-        if (gamemap < 12)
-            skytexturename = "SKY1";
-        else if (gamemap < 21)
-            skytexturename = "SKY2";
-        else
-            skytexturename = "SKY3";
-    }
-    else
-    {
-        switch (gameepisode)
-        {
-          default:
-          case 1:
-            skytexturename = "SKY1";
-            break;
-          case 2:
-            skytexturename = "SKY2";
-            break;
-          case 3:
-            skytexturename = "SKY3";
-            break;
-          case 4:        // Special Edition sky
-            skytexturename = "SKY4";
-            break;
-        }
-    }
-
-    skytexturename = DEH_String(skytexturename);
-
-    skytexture = R_TextureNumForName(skytexturename);
-
-
-    G_DoLoadLevel ();
-}
-
-
-//
-// DEMO RECORDING 
-// 
-#define DEMOMARKER		0x80
-
-
-void G_ReadDemoTiccmd (ticcmd_t* cmd) 
-{ 
-    if (*demo_p == DEMOMARKER) 
-    {
-	// end of demo data stream 
-	G_CheckDemoStatus (); 
-	return; 
-    } 
-    cmd->forwardmove = ((signed char)*demo_p++); 
-    cmd->sidemove = ((signed char)*demo_p++); 
-
-    // If this is a longtics demo, read back in higher resolution
-
-    if (longtics)
-    {
-        cmd->angleturn = *demo_p++;
-        cmd->angleturn |= (*demo_p++) << 8;
-    }
-    else
-    {
-        cmd->angleturn = ((unsigned char) *demo_p++)<<8; 
-    }
-
-    cmd->buttons = (unsigned char)*demo_p++; 
-} 
-
-// Increase the size of the demo buffer to allow unlimited demos
-
-static void IncreaseDemoBuffer(void)
-{
-    int current_length;
-    byte *new_demobuffer;
-    byte *new_demop;
-    int new_length;
-
-    // Find the current size
-
-    current_length = demoend - demobuffer;
-    
-    // Generate a new buffer twice the size
-    new_length = current_length * 2;
-    
-    new_demobuffer = (byte *) Z_Malloc(new_length, PU_STATIC, 0);
-    new_demop = new_demobuffer + (demo_p - demobuffer);
-
-    // Copy over the old data
-
-    memcpy(new_demobuffer, demobuffer, current_length);
-
-    // Free the old buffer and point the demo pointers at the new buffer.
-
-    Z_Free(demobuffer);
-
-    demobuffer = new_demobuffer;
-    demo_p = new_demop;
-    demoend = demobuffer + new_length;
-}
-
-void G_WriteDemoTiccmd (ticcmd_t* cmd) 
-{ 
-    byte *demo_start;
-
-    if (gamekeydown[key_demo_quit])           // press q to end demo recording 
-	G_CheckDemoStatus (); 
-
-    demo_start = demo_p;
-
-    *demo_p++ = cmd->forwardmove; 
-    *demo_p++ = cmd->sidemove; 
-
-    // If this is a longtics demo, record in higher resolution
- 
-    if (longtics)
-    {
-        *demo_p++ = (cmd->angleturn & 0xff);
-        *demo_p++ = (cmd->angleturn >> 8) & 0xff;
-    }
-    else
-    {
-        *demo_p++ = cmd->angleturn >> 8; 
-    }
-
-    *demo_p++ = cmd->buttons; 
-
-    // reset demo pointer back
-    demo_p = demo_start;
-
-    if (demo_p > demoend - 16)
-    {
-        if (vanilla_demo_limit)
-        {
-            // no more space 
-            G_CheckDemoStatus (); 
-            return; 
-        }
-        else
-        {
-            // Vanilla demo limit disabled: unlimited
-            // demo lengths!
-
-            IncreaseDemoBuffer();
-        }
-    } 
-	
-    G_ReadDemoTiccmd (cmd);         // make SURE it is exactly the same 
-} 
- 
- 
- 
-//
-// G_RecordDemo
-//
-void G_RecordDemo (char *name)
-{
-    size_t demoname_size;
-    int i;
-    int maxsize;
-
-    usergame = false;
-    demoname_size = strlen(name) + 5;
-    demoname = (char *) Z_Malloc(demoname_size, PU_STATIC, NULL);
-    M_snprintf(demoname, demoname_size, "%s.lmp", name);
-    maxsize = 0x20000;
-
-    //!
-    // @arg <size>
-    // @category demo
-    // @vanilla
-    //
-    // Specify the demo buffer size (KiB)
-    //
-
-    i = M_CheckParmWithArgs("-maxdemo", 1);
-    if (i)
-	maxsize = atoi(myargv[i+1])*1024;
-    demobuffer = (byte *) Z_Malloc (maxsize,PU_STATIC,NULL); 
-    demoend = demobuffer + maxsize;
-	
-    demorecording = true; 
-} 
-
-// Get the demo version code appropriate for the version set in gameversion.
-int G_VanillaVersionCode(void)
-{
-    switch (gameversion)
-    {
-        case exe_doom_1_2:
-            I_Error("Doom 1.2 does not have a version code!");
-        case exe_doom_1_666:
-            return 106;
-        case exe_doom_1_7:
-            return 107;
-        case exe_doom_1_8:
-            return 108;
-        case exe_doom_1_9:
-        default:  // All other versions are variants on v1.9:
-            return 109;
-    }
-}
-
-void G_BeginRecording (void) 
-{ 
-    int             i; 
-
-    //!
-    // @category demo
-    //
-    // Record a high resolution "Doom 1.91" demo.
-    //
-
-    longtics = M_CheckParm("-longtics") != 0;
-
-    // If not recording a longtics demo, record in low res
-
-    lowres_turn = !longtics;
-    
-    demo_p = demobuffer;
-	
-    // Save the right version code for this demo
- 
-    if (longtics)
-    {
-        *demo_p++ = DOOM_191_VERSION;
-    }
-    else
-    {
-        *demo_p++ = G_VanillaVersionCode();
-    }
-
-    *demo_p++ = gameskill; 
-    *demo_p++ = gameepisode; 
-    *demo_p++ = gamemap; 
-    *demo_p++ = deathmatch; 
-    *demo_p++ = respawnparm;
-    *demo_p++ = fastparm;
-    *demo_p++ = nomonsters;
-    *demo_p++ = consoleplayer;
-	 
-    for (i=0 ; i<MAXPLAYERS ; i++) 
-	*demo_p++ = playeringame[i]; 		 
-} 
- 
-
-//
-// G_PlayDemo 
-//
-
-char*	defdemoname; 
- 
-void G_DeferedPlayDemo (char* name) 
-{ 
-    defdemoname = name; 
-    gameaction = ga_playdemo; 
-} 
 
 // Generate a string describing a demo version
 
@@ -16376,7 +14361,7 @@ void G_DoPlayDemo (void)
                          DemoVersionDescription(demoversion));
     }
     
-    skill = *demo_p++; 
+    skill = (skill_t) *demo_p++; 
     episode = *demo_p++; 
     map = *demo_p++; 
     deathmatch = *demo_p++;
@@ -18809,7 +16794,8 @@ void cmap_to_fb(uint8_t *out, uint8_t *in, int in_pixels)
         else if (s_Fb.bits_per_pixel == 32)
         {
             // Assuming RGBA8888
-            pix = (c.r << s_Fb.red.offset) |
+            pix = (0xFF << s_Fb.transp.offset) |
+                  (c.r << s_Fb.red.offset) |
                   (c.g << s_Fb.green.offset) |
                   (c.b << s_Fb.blue.offset);
 
@@ -24972,7 +22958,7 @@ void M_DrawLoad(void)
     int             i;
 	
     V_DrawPatchDirect(72, 28, 
-                      W_CacheLumpName(DEH_String("M_LOADG"), PU_CACHE));
+                      (patch_t*)W_CacheLumpName(DEH_String("M_LOADG"), PU_CACHE));
 
     for (i = 0;i < load_end; i++)
     {
@@ -24991,17 +22977,17 @@ void M_DrawSaveLoadBorder(int x,int y)
     int             i;
 	
     V_DrawPatchDirect(x - 8, y + 7,
-                      W_CacheLumpName(DEH_String("M_LSLEFT"), PU_CACHE));
+                      (patch_t*)W_CacheLumpName(DEH_String("M_LSLEFT"), PU_CACHE));
 	
     for (i = 0;i < 24;i++)
     {
 	V_DrawPatchDirect(x, y + 7,
-                          W_CacheLumpName(DEH_String("M_LSCNTR"), PU_CACHE));
+                          (patch_t*)W_CacheLumpName(DEH_String("M_LSCNTR"), PU_CACHE));
 	x += 8;
     }
 
     V_DrawPatchDirect(x, y + 7, 
-                      W_CacheLumpName(DEH_String("M_LSRGHT"), PU_CACHE));
+                      (patch_t*)W_CacheLumpName(DEH_String("M_LSRGHT"), PU_CACHE));
 }
 
 
@@ -25042,7 +23028,7 @@ void M_DrawSave(void)
 {
     int             i;
 	
-    V_DrawPatchDirect(72, 28, W_CacheLumpName(DEH_String("M_SAVEG"), PU_CACHE));
+    V_DrawPatchDirect(72, 28, (patch_t*)W_CacheLumpName(DEH_String("M_SAVEG"), PU_CACHE));
     for (i = 0;i < load_end; i++)
     {
 	M_DrawSaveLoadBorder(LoadDef.x,LoadDef.y+LINEHEIGHT*i);
@@ -25246,7 +23232,7 @@ void M_DrawReadThis1(void)
 
     lumpname = DEH_String(lumpname);
     
-    V_DrawPatchDirect (0, 0, W_CacheLumpName(lumpname, PU_CACHE));
+    V_DrawPatchDirect (0, 0, (patch_t*)W_CacheLumpName(lumpname, PU_CACHE));
 
     ReadDef1.x = skullx;
     ReadDef1.y = skully;
@@ -25264,7 +23250,7 @@ void M_DrawReadThis2(void)
     // We only ever draw the second page if this is 
     // gameversion == exe_doom_1_9 and gamemode == registered
 
-    V_DrawPatchDirect(0, 0, W_CacheLumpName(DEH_String("HELP1"), PU_CACHE));
+    V_DrawPatchDirect(0, 0, (patch_t*)W_CacheLumpName(DEH_String("HELP1"), PU_CACHE));
 }
 
 
@@ -25273,7 +23259,7 @@ void M_DrawReadThis2(void)
 //
 void M_DrawSound(void)
 {
-    V_DrawPatchDirect (60, 38, W_CacheLumpName(DEH_String("M_SVOL"), PU_CACHE));
+    V_DrawPatchDirect (60, 38, (patch_t*)W_CacheLumpName(DEH_String("M_SVOL"), PU_CACHE));
 
     M_DrawThermo(SoundDef.x,SoundDef.y+LINEHEIGHT*(sfx_vol+1),
 		 16,sfxVolume);
@@ -25330,7 +23316,7 @@ void M_MusicVol(int choice)
 void M_DrawMainMenu(void)
 {
     V_DrawPatchDirect(94, 2,
-                      W_CacheLumpName(DEH_String("M_DOOM"), PU_CACHE));
+                      (patch_t*)W_CacheLumpName(DEH_String("M_DOOM"), PU_CACHE));
 }
 
 
@@ -25341,8 +23327,8 @@ void M_DrawMainMenu(void)
 //
 void M_DrawNewGame(void)
 {
-    V_DrawPatchDirect(96, 14, W_CacheLumpName(DEH_String("M_NEWG"), PU_CACHE));
-    V_DrawPatchDirect(54, 38, W_CacheLumpName(DEH_String("M_SKILL"), PU_CACHE));
+    V_DrawPatchDirect(96, 14, (patch_t*)W_CacheLumpName(DEH_String("M_NEWG"), PU_CACHE));
+    V_DrawPatchDirect(54, 38, (patch_t*)W_CacheLumpName(DEH_String("M_SKILL"), PU_CACHE));
 }
 
 void M_NewGame(int choice)
@@ -25369,7 +23355,7 @@ int     epi;
 
 void M_DrawEpisode(void)
 {
-    V_DrawPatchDirect(54, 38, W_CacheLumpName(DEH_String("M_EPISOD"), PU_CACHE));
+    V_DrawPatchDirect(54, 38, (patch_t*)W_CacheLumpName(DEH_String("M_EPISOD"), PU_CACHE));
 }
 
 void M_VerifyNightmare(int key)
@@ -25426,15 +23412,15 @@ static char *msgNames[2] = {"M_MSGOFF","M_MSGON"};
 
 void M_DrawOptions(void)
 {
-    V_DrawPatchDirect(108, 15, W_CacheLumpName(DEH_String("M_OPTTTL"),
+    V_DrawPatchDirect(108, 15, (patch_t*)W_CacheLumpName(DEH_String("M_OPTTTL"),
                                                PU_CACHE));
 	
     V_DrawPatchDirect(OptionsDef.x + 175, OptionsDef.y + LINEHEIGHT * detail,
-		      W_CacheLumpName(DEH_String(detailNames[detailLevel]),
+		      (patch_t*)W_CacheLumpName(DEH_String(detailNames[detailLevel]),
 			              PU_CACHE));
 
     V_DrawPatchDirect(OptionsDef.x + 120, OptionsDef.y + LINEHEIGHT * messages,
-                      W_CacheLumpName(DEH_String(msgNames[showMessages]),
+                      (patch_t*)W_CacheLumpName(DEH_String(msgNames[showMessages]),
                                       PU_CACHE));
 
     M_DrawThermo(OptionsDef.x, OptionsDef.y + LINEHEIGHT * (mousesens + 1),
@@ -25691,14 +23677,14 @@ M_DrawThermo
     int		i;
 
     xx = x;
-    V_DrawPatchDirect(xx, y, W_CacheLumpName(DEH_String("M_THERML"), PU_CACHE));
+    V_DrawPatchDirect(xx, y, (patch_t*)W_CacheLumpName(DEH_String("M_THERML"), PU_CACHE));
     xx += 8;
     for (i=0;i<thermWidth;i++)
     {
-	V_DrawPatchDirect(xx, y, W_CacheLumpName(DEH_String("M_THERMM"), PU_CACHE));
+	V_DrawPatchDirect(xx, y, (patch_t*)W_CacheLumpName(DEH_String("M_THERMM"), PU_CACHE));
 	xx += 8;
     }
-    V_DrawPatchDirect(xx, y, W_CacheLumpName(DEH_String("M_THERMR"), PU_CACHE));
+    V_DrawPatchDirect(xx, y, (patch_t*)W_CacheLumpName(DEH_String("M_THERMR"), PU_CACHE));
 
     V_DrawPatchDirect((x + 8) + thermDot * 8, y,
 		      W_CacheLumpName(DEH_String("M_THERMO"), PU_CACHE));
@@ -25712,7 +23698,7 @@ M_DrawEmptyCell
   int		item )
 {
     V_DrawPatchDirect(menu->x - 10, menu->y + item * LINEHEIGHT - 1, 
-                      W_CacheLumpName(DEH_String("M_CELL1"), PU_CACHE));
+                      (patch_t*)W_CacheLumpName(DEH_String("M_CELL1"), PU_CACHE));
 }
 
 void
@@ -25721,7 +23707,7 @@ M_DrawSelCell
   int		item )
 {
     V_DrawPatchDirect(menu->x - 10, menu->y + item * LINEHEIGHT - 1,
-                      W_CacheLumpName(DEH_String("M_CELL2"), PU_CACHE));
+                      (patch_t*)W_CacheLumpName(DEH_String("M_CELL2"), PU_CACHE));
 }
 
 
@@ -26186,7 +24172,7 @@ boolean M_Responder (event_t* ev)
 	    if (usegamma > 4)
 		usegamma = 0;
 	    players[consoleplayer].message = DEH_String(gammamsg[usegamma]);
-            I_SetPalette (W_CacheLumpName (DEH_String("PLAYPAL"),PU_CACHE));
+            I_SetPalette ((byte*)W_CacheLumpName (DEH_String("PLAYPAL"),PU_CACHE));
 	    return true;
 	}
     }
@@ -26462,7 +24448,7 @@ void M_Drawer (void)
 
 	if (name[0])
 	{
-	    V_DrawPatchDirect (x, y, W_CacheLumpName(name, PU_CACHE));
+	    V_DrawPatchDirect (x, y, (patch_t*)W_CacheLumpName(name, PU_CACHE));
 	}
 	y += LINEHEIGHT;
     }
@@ -26470,7 +24456,7 @@ void M_Drawer (void)
     
     // DRAW SKULL
     V_DrawPatchDirect(x + SKULLXOFF, currentMenu->y - 5 + itemOn*LINEHEIGHT,
-		      W_CacheLumpName(DEH_String(skullName[whichSkull]),
+		      (patch_t*)W_CacheLumpName(DEH_String(skullName[whichSkull]),
 				      PU_CACHE));
 }
 
@@ -27894,7 +25880,7 @@ boolean mus2mid(MEMFILE *musinput, MEMFILE *midioutput)
             }
 
             channel = GetMIDIChannel(eventdescriptor & 0x0F, midioutput);
-            event = eventdescriptor & 0x70;
+            event =(musevent)  (musevent) eventdescriptor & 0x70;
 
             switch (event)
             {
@@ -29579,7 +27565,7 @@ void P_NewChaseDir (mobj_t*	actor)
     if (!actor->target)
 	I_Error ("P_NewChaseDir: called with no target");
 		
-    olddir = actor->movedir;
+    olddir = (dirtype_t) actor->movedir;
     turnaround=opposite[olddir];
 
     deltax = actor->target->x - actor->x;
@@ -29614,7 +27600,7 @@ void P_NewChaseDir (mobj_t*	actor)
     {
 	tdir=d[1];
 	d[1]=d[2];
-	d[2]=tdir;
+	d[2]=(dirtype_t) tdir;
     }
 
     if (d[1]==turnaround)
@@ -36785,7 +34771,7 @@ EV_DoPlat
 		plat->high = sec->floorheight;
 
 	    plat->wait = TICRATE*PLATWAIT;
-	    plat->status = P_Random()&1;
+	    plat->status =(plat_e)  (plat_e) P_Random()&1;
 
 	    S_StartSound(&sec->soundorg,sfx_pstart);
 	    break;
@@ -36994,7 +34980,7 @@ void P_BringUpWeapon (player_t* player)
     if (player->pendingweapon == wp_chainsaw)
 	S_StartSound (player->mo, sfx_sawup);
 		
-    newstate = weaponinfo[player->pendingweapon].upstate;
+    newstate = (statenum_t) weaponinfo[player->pendingweapon].upstate;
 
     player->pendingweapon = wp_nochange;
     player->psprites[ps_weapon].sy = WEAPONBOTTOM;
@@ -37100,7 +35086,7 @@ void P_FireWeapon (player_t* player)
 	return;
 	
     P_SetMobjState (player->mo, S_PLAY_ATK1);
-    newstate = weaponinfo[player->readyweapon].atkstate;
+    newstate = (statenum_t) weaponinfo[player->readyweapon].atkstate;
     P_SetPsprite (player, ps_weapon, newstate);
     P_NoiseAlert (player->mo, player->mo);
 }
@@ -37154,7 +35140,7 @@ A_WeaponReady
     {
 	// change weapon
 	//  (pending weapon should allready be validated)
-	newstate = weaponinfo[player->readyweapon].downstate;
+	newstate = (statenum_t) weaponinfo[player->readyweapon].downstate;
 	P_SetPsprite (player, ps_weapon, newstate);
 	return;	
     }
@@ -37284,7 +35270,7 @@ A_Raise
     
     // The weapon has been raised all the way,
     //  so change to the ready state.
-    newstate = weaponinfo[player->readyweapon].readystate;
+    newstate = (statenum_t) weaponinfo[player->readyweapon].readystate;
 
     P_SetPsprite (player, ps_weapon, newstate);
 }
@@ -41664,7 +39650,7 @@ void P_PlayerThink (player_t* player)
 	// The actual changing of the weapon is done
 	//  when the weapon psprite can do it
 	//  (read: not in the middle of an attack).
-	newweapon = (cmd->buttons&BT_WEAPONMASK)>>BT_WEAPONSHIFT;
+	newweapon =(weapontype_t)  (weapontype_t) (cmd->buttons&BT_WEAPONMASK)>>BT_WEAPONSHIFT;
 	
 	if (newweapon == wp_fist
 	    && player->weaponowned[wp_chainsaw]
@@ -48341,347 +46327,7 @@ void SHA1_UpdateInt32(sha1_context_t *context, unsigned int val)
     SHA1_Update(context, buf, 4);
 }
 
-void SHA1_UpdateString(sha1_context_t *context, char *str)
-{
-    SHA1_Update(context, (byte *) str, strlen(str) + 1);
-}
 
-
-// --- tables.c ---
-//
-// Copyright(C) 1993-1996 Id Software, Inc.
-// Copyright(C) 2005-2014 Simon Howard
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//	Lookup tables.
-//	Do not try to look them up :-).
-//	In the order of appearance: 
-//
-//	int finetangent[4096]	- Tangens LUT.
-//	 Should work with BAM fairly well (12 of 16bit,
-//      effectively, by shifting).
-//
-//	int finesine[10240]		- Sine lookup.
-//	 Guess what, serves as cosine, too.
-//	 Remarkable thing is, how to use BAMs with this? 
-//
-//	int tantoangle[2049]	- ArcTan LUT,
-//	  maps tan(angle) to angle fast. Gotta search.
-//	
-//    
-
-// include stripped
-
-// to get a global angle from cartesian coordinates, the coordinates are
-// flipped until they are in the first octant of the coordinate system, then
-// the y (<=x) is scaled and divided by x to get a tangent (slope) value
-// which is looked up in the tantoangle[] table.  The +1 size is to handle
-// the case when x==y without additional checking.
-
-int SlopeDiv(unsigned int num, unsigned int den)
-{
-    unsigned ans;
-    
-    if (den < 512)
-    {
-        return SLOPERANGE;
-    }
-    else
-    {
-        ans = (num << 3) / (den >> 8);
-
-        if (ans <= SLOPERANGE)
-        {
-            return ans;
-        }
-        else
-        {
-            return SLOPERANGE;
-        }
-    }
-}
-
-const int finetangent[4096] =
-{
-    -170910304,-56965752,-34178904,-24413316,-18988036,-15535599,-13145455,-11392683,
-    -10052327,-8994149,-8137527,-7429880,-6835455,-6329090,-5892567,-5512368,
-    -5178251,-4882318,-4618375,-4381502,-4167737,-3973855,-3797206,-3635590,
-    -3487165,-3350381,-3223918,-3106651,-2997613,-2895966,-2800983,-2712030,
-    -2628549,-2550052,-2476104,-2406322,-2340362,-2277919,-2218719,-2162516,
-    -2109087,-2058233,-2009771,-1963536,-1919378,-1877161,-1836758,-1798063,
-    -1760956,-1725348,-1691149,-1658278,-1626658,-1596220,-1566898,-1538632,
-    -1511367,-1485049,-1459630,-1435065,-1411312,-1388330,-1366084,-1344537,
-    -1323658,-1303416,-1283783,-1264730,-1246234,-1228269,-1210813,-1193846,
-    -1177345,-1161294,-1145673,-1130465,-1115654,-1101225,-1087164,-1073455,
-    -1060087,-1047046,-1034322,-1021901,-1009774,-997931,-986361,-975054,
-    -964003,-953199,-942633,-932298,-922186,-912289,-902602,-893117,
-    -883829,-874730,-865817,-857081,-848520,-840127,-831898,-823827,
-    -815910,-808143,-800521,-793041,-785699,-778490,-771411,-764460,
-    -757631,-750922,-744331,-737853,-731486,-725227,-719074,-713023,
-    -707072,-701219,-695462,-689797,-684223,-678737,-673338,-668024,
-    -662792,-657640,-652568,-647572,-642651,-637803,-633028,-628323,
-    -623686,-619117,-614613,-610174,-605798,-601483,-597229,-593033,
-    -588896,-584815,-580789,-576818,-572901,-569035,-565221,-561456,
-    -557741,-554074,-550455,-546881,-543354,-539870,-536431,-533034,
-    -529680,-526366,-523094,-519861,-516667,-513512,-510394,-507313,
-    -504269,-501261,-498287,-495348,-492443,-489571,-486732,-483925,
-    -481150,-478406,-475692,-473009,-470355,-467730,-465133,-462565,
-    -460024,-457511,-455024,-452564,-450129,-447720,-445337,-442978,
-    -440643,-438332,-436045,-433781,-431540,-429321,-427125,-424951,
-    -422798,-420666,-418555,-416465,-414395,-412344,-410314,-408303,
-    -406311,-404338,-402384,-400448,-398530,-396630,-394747,-392882,
-    -391034,-389202,-387387,-385589,-383807,-382040,-380290,-378555,
-    -376835,-375130,-373440,-371765,-370105,-368459,-366826,-365208,
-    -363604,-362013,-360436,-358872,-357321,-355783,-354257,-352744,
-    -351244,-349756,-348280,-346816,-345364,-343924,-342495,-341078,
-    -339671,-338276,-336892,-335519,-334157,-332805,-331464,-330133,
-    -328812,-327502,-326201,-324910,-323629,-322358,-321097,-319844,
-    -318601,-317368,-316143,-314928,-313721,-312524,-311335,-310154,
-    -308983,-307819,-306664,-305517,-304379,-303248,-302126,-301011,
-    -299904,-298805,-297714,-296630,-295554,-294485,-293423,-292369,
-    -291322,-290282,-289249,-288223,-287204,-286192,-285186,-284188,
-    -283195,-282210,-281231,-280258,-279292,-278332,-277378,-276430,
-    -275489,-274553,-273624,-272700,-271782,-270871,-269965,-269064,
-    -268169,-267280,-266397,-265519,-264646,-263779,-262917,-262060,
-    -261209,-260363,-259522,-258686,-257855,-257029,-256208,-255392,
-    -254581,-253774,-252973,-252176,-251384,-250596,-249813,-249035,
-    -248261,-247492,-246727,-245966,-245210,-244458,-243711,-242967,
-    -242228,-241493,-240763,-240036,-239314,-238595,-237881,-237170,
-    -236463,-235761,-235062,-234367,-233676,-232988,-232304,-231624,
-    -230948,-230275,-229606,-228941,-228279,-227621,-226966,-226314,
-    -225666,-225022,-224381,-223743,-223108,-222477,-221849,-221225,
-    -220603,-219985,-219370,-218758,-218149,-217544,-216941,-216341,
-    -215745,-215151,-214561,-213973,-213389,-212807,-212228,-211652,
-    -211079,-210509,-209941,-209376,-208815,-208255,-207699,-207145,
-    -206594,-206045,-205500,-204956,-204416,-203878,-203342,-202809,
-    -202279,-201751,-201226,-200703,-200182,-199664,-199149,-198636,
-    -198125,-197616,-197110,-196606,-196105,-195606,-195109,-194614,
-    -194122,-193631,-193143,-192658,-192174,-191693,-191213,-190736,
-    -190261,-189789,-189318,-188849,-188382,-187918,-187455,-186995,
-    -186536,-186080,-185625,-185173,-184722,-184274,-183827,-183382,
-    -182939,-182498,-182059,-181622,-181186,-180753,-180321,-179891,
-    -179463,-179037,-178612,-178190,-177769,-177349,-176932,-176516,
-    -176102,-175690,-175279,-174870,-174463,-174057,-173653,-173251,
-    -172850,-172451,-172053,-171657,-171263,-170870,-170479,-170089,
-    -169701,-169315,-168930,-168546,-168164,-167784,-167405,-167027,
-    -166651,-166277,-165904,-165532,-165162,-164793,-164426,-164060,
-    -163695,-163332,-162970,-162610,-162251,-161893,-161537,-161182,
-    -160828,-160476,-160125,-159775,-159427,-159079,-158734,-158389,
-    -158046,-157704,-157363,-157024,-156686,-156349,-156013,-155678,
-    -155345,-155013,-154682,-154352,-154024,-153697,-153370,-153045,
-    -152722,-152399,-152077,-151757,-151438,-151120,-150803,-150487,
-    -150172,-149859,-149546,-149235,-148924,-148615,-148307,-148000,
-    -147693,-147388,-147084,-146782,-146480,-146179,-145879,-145580,
-    -145282,-144986,-144690,-144395,-144101,-143808,-143517,-143226,
-    -142936,-142647,-142359,-142072,-141786,-141501,-141217,-140934,
-    -140651,-140370,-140090,-139810,-139532,-139254,-138977,-138701,
-    -138426,-138152,-137879,-137607,-137335,-137065,-136795,-136526,
-    -136258,-135991,-135725,-135459,-135195,-134931,-134668,-134406,
-    -134145,-133884,-133625,-133366,-133108,-132851,-132594,-132339,
-    -132084,-131830,-131576,-131324,-131072,-130821,-130571,-130322,
-    -130073,-129825,-129578,-129332,-129086,-128841,-128597,-128353,
-    -128111,-127869,-127627,-127387,-127147,-126908,-126669,-126432,
-    -126195,-125959,-125723,-125488,-125254,-125020,-124787,-124555,
-    -124324,-124093,-123863,-123633,-123404,-123176,-122949,-122722,
-    -122496,-122270,-122045,-121821,-121597,-121374,-121152,-120930,
-    -120709,-120489,-120269,-120050,-119831,-119613,-119396,-119179,
-    -118963,-118747,-118532,-118318,-118104,-117891,-117678,-117466,
-    -117254,-117044,-116833,-116623,-116414,-116206,-115998,-115790,
-    -115583,-115377,-115171,-114966,-114761,-114557,-114354,-114151,
-    -113948,-113746,-113545,-113344,-113143,-112944,-112744,-112546,
-    -112347,-112150,-111952,-111756,-111560,-111364,-111169,-110974,
-    -110780,-110586,-110393,-110200,-110008,-109817,-109626,-109435,
-    -109245,-109055,-108866,-108677,-108489,-108301,-108114,-107927,
-    -107741,-107555,-107369,-107184,-107000,-106816,-106632,-106449,
-    -106266,-106084,-105902,-105721,-105540,-105360,-105180,-105000,
-    -104821,-104643,-104465,-104287,-104109,-103933,-103756,-103580,
-    -103404,-103229,-103054,-102880,-102706,-102533,-102360,-102187,
-    -102015,-101843,-101671,-101500,-101330,-101159,-100990,-100820,
-    -100651,-100482,-100314,-100146,-99979,-99812,-99645,-99479,
-    -99313,-99148,-98982,-98818,-98653,-98489,-98326,-98163,
-    -98000,-97837,-97675,-97513,-97352,-97191,-97030,-96870,
-    -96710,-96551,-96391,-96233,-96074,-95916,-95758,-95601,
-    -95444,-95287,-95131,-94975,-94819,-94664,-94509,-94354,
-    -94200,-94046,-93892,-93739,-93586,-93434,-93281,-93129,
-    -92978,-92826,-92675,-92525,-92375,-92225,-92075,-91926,
-    -91777,-91628,-91480,-91332,-91184,-91036,-90889,-90742,
-    -90596,-90450,-90304,-90158,-90013,-89868,-89724,-89579,
-    -89435,-89292,-89148,-89005,-88862,-88720,-88577,-88435,
-    -88294,-88152,-88011,-87871,-87730,-87590,-87450,-87310,
-    -87171,-87032,-86893,-86755,-86616,-86479,-86341,-86204,
-    -86066,-85930,-85793,-85657,-85521,-85385,-85250,-85114,
-    -84980,-84845,-84710,-84576,-84443,-84309,-84176,-84043,
-    -83910,-83777,-83645,-83513,-83381,-83250,-83118,-82987,
-    -82857,-82726,-82596,-82466,-82336,-82207,-82078,-81949,
-    -81820,-81691,-81563,-81435,-81307,-81180,-81053,-80925,
-    -80799,-80672,-80546,-80420,-80294,-80168,-80043,-79918,
-    -79793,-79668,-79544,-79420,-79296,-79172,-79048,-78925,
-    -78802,-78679,-78557,-78434,-78312,-78190,-78068,-77947,
-    -77826,-77705,-77584,-77463,-77343,-77223,-77103,-76983,
-    -76864,-76744,-76625,-76506,-76388,-76269,-76151,-76033,
-    -75915,-75797,-75680,-75563,-75446,-75329,-75213,-75096,
-    -74980,-74864,-74748,-74633,-74517,-74402,-74287,-74172,
-    -74058,-73944,-73829,-73715,-73602,-73488,-73375,-73262,
-    -73149,-73036,-72923,-72811,-72699,-72587,-72475,-72363,
-    -72252,-72140,-72029,-71918,-71808,-71697,-71587,-71477,
-    -71367,-71257,-71147,-71038,-70929,-70820,-70711,-70602,
-    -70494,-70385,-70277,-70169,-70061,-69954,-69846,-69739,
-    -69632,-69525,-69418,-69312,-69205,-69099,-68993,-68887,
-    -68781,-68676,-68570,-68465,-68360,-68255,-68151,-68046,
-    -67942,-67837,-67733,-67629,-67526,-67422,-67319,-67216,
-    -67113,-67010,-66907,-66804,-66702,-66600,-66498,-66396,
-    -66294,-66192,-66091,-65989,-65888,-65787,-65686,-65586,
-    -65485,-65385,-65285,-65185,-65085,-64985,-64885,-64786,
-    -64687,-64587,-64488,-64389,-64291,-64192,-64094,-63996,
-    -63897,-63799,-63702,-63604,-63506,-63409,-63312,-63215,
-    -63118,-63021,-62924,-62828,-62731,-62635,-62539,-62443,
-    -62347,-62251,-62156,-62060,-61965,-61870,-61775,-61680,
-    -61585,-61491,-61396,-61302,-61208,-61114,-61020,-60926,
-    -60833,-60739,-60646,-60552,-60459,-60366,-60273,-60181,
-    -60088,-59996,-59903,-59811,-59719,-59627,-59535,-59444,
-    -59352,-59261,-59169,-59078,-58987,-58896,-58805,-58715,
-    -58624,-58534,-58443,-58353,-58263,-58173,-58083,-57994,
-    -57904,-57815,-57725,-57636,-57547,-57458,-57369,-57281,
-    -57192,-57104,-57015,-56927,-56839,-56751,-56663,-56575,
-    -56487,-56400,-56312,-56225,-56138,-56051,-55964,-55877,
-    -55790,-55704,-55617,-55531,-55444,-55358,-55272,-55186,
-    -55100,-55015,-54929,-54843,-54758,-54673,-54587,-54502,
-    -54417,-54333,-54248,-54163,-54079,-53994,-53910,-53826,
-    -53741,-53657,-53574,-53490,-53406,-53322,-53239,-53156,
-    -53072,-52989,-52906,-52823,-52740,-52657,-52575,-52492,
-    -52410,-52327,-52245,-52163,-52081,-51999,-51917,-51835,
-    -51754,-51672,-51591,-51509,-51428,-51347,-51266,-51185,
-    -51104,-51023,-50942,-50862,-50781,-50701,-50621,-50540,
-    -50460,-50380,-50300,-50221,-50141,-50061,-49982,-49902,
-    -49823,-49744,-49664,-49585,-49506,-49427,-49349,-49270,
-    -49191,-49113,-49034,-48956,-48878,-48799,-48721,-48643,
-    -48565,-48488,-48410,-48332,-48255,-48177,-48100,-48022,
-    -47945,-47868,-47791,-47714,-47637,-47560,-47484,-47407,
-    -47331,-47254,-47178,-47102,-47025,-46949,-46873,-46797,
-    -46721,-46646,-46570,-46494,-46419,-46343,-46268,-46193,
-    -46118,-46042,-45967,-45892,-45818,-45743,-45668,-45593,
-    -45519,-45444,-45370,-45296,-45221,-45147,-45073,-44999,
-    -44925,-44851,-44778,-44704,-44630,-44557,-44483,-44410,
-    -44337,-44263,-44190,-44117,-44044,-43971,-43898,-43826,
-    -43753,-43680,-43608,-43535,-43463,-43390,-43318,-43246,
-    -43174,-43102,-43030,-42958,-42886,-42814,-42743,-42671,
-    -42600,-42528,-42457,-42385,-42314,-42243,-42172,-42101,
-    -42030,-41959,-41888,-41817,-41747,-41676,-41605,-41535,
-    -41465,-41394,-41324,-41254,-41184,-41113,-41043,-40973,
-    -40904,-40834,-40764,-40694,-40625,-40555,-40486,-40416,
-    -40347,-40278,-40208,-40139,-40070,-40001,-39932,-39863,
-    -39794,-39726,-39657,-39588,-39520,-39451,-39383,-39314,
-    -39246,-39178,-39110,-39042,-38973,-38905,-38837,-38770,
-    -38702,-38634,-38566,-38499,-38431,-38364,-38296,-38229,
-    -38161,-38094,-38027,-37960,-37893,-37826,-37759,-37692,
-    -37625,-37558,-37491,-37425,-37358,-37291,-37225,-37158,
-    -37092,-37026,-36959,-36893,-36827,-36761,-36695,-36629,
-    -36563,-36497,-36431,-36365,-36300,-36234,-36168,-36103,
-    -36037,-35972,-35907,-35841,-35776,-35711,-35646,-35580,
-    -35515,-35450,-35385,-35321,-35256,-35191,-35126,-35062,
-    -34997,-34932,-34868,-34803,-34739,-34675,-34610,-34546,
-    -34482,-34418,-34354,-34289,-34225,-34162,-34098,-34034,
-    -33970,-33906,-33843,-33779,-33715,-33652,-33588,-33525,
-    -33461,-33398,-33335,-33272,-33208,-33145,-33082,-33019,
-    -32956,-32893,-32830,-32767,-32705,-32642,-32579,-32516,
-    -32454,-32391,-32329,-32266,-32204,-32141,-32079,-32017,
-    -31955,-31892,-31830,-31768,-31706,-31644,-31582,-31520,
-    -31458,-31396,-31335,-31273,-31211,-31150,-31088,-31026,
-    -30965,-30904,-30842,-30781,-30719,-30658,-30597,-30536,
-    -30474,-30413,-30352,-30291,-30230,-30169,-30108,-30048,
-    -29987,-29926,-29865,-29805,-29744,-29683,-29623,-29562,
-    -29502,-29441,-29381,-29321,-29260,-29200,-29140,-29080,
-    -29020,-28959,-28899,-28839,-28779,-28719,-28660,-28600,
-    -28540,-28480,-28420,-28361,-28301,-28241,-28182,-28122,
-    -28063,-28003,-27944,-27884,-27825,-27766,-27707,-27647,
-    -27588,-27529,-27470,-27411,-27352,-27293,-27234,-27175,
-    -27116,-27057,-26998,-26940,-26881,-26822,-26763,-26705,
-    -26646,-26588,-26529,-26471,-26412,-26354,-26295,-26237,
-    -26179,-26120,-26062,-26004,-25946,-25888,-25830,-25772,
-    -25714,-25656,-25598,-25540,-25482,-25424,-25366,-25308,
-    -25251,-25193,-25135,-25078,-25020,-24962,-24905,-24847,
-    -24790,-24732,-24675,-24618,-24560,-24503,-24446,-24389,
-    -24331,-24274,-24217,-24160,-24103,-24046,-23989,-23932,
-    -23875,-23818,-23761,-23704,-23647,-23591,-23534,-23477,
-    -23420,-23364,-23307,-23250,-23194,-23137,-23081,-23024,
-    -22968,-22911,-22855,-22799,-22742,-22686,-22630,-22573,
-    -22517,-22461,-22405,-22349,-22293,-22237,-22181,-22125,
-    -22069,-22013,-21957,-21901,-21845,-21789,-21733,-21678,
-    -21622,-21566,-21510,-21455,-21399,-21343,-21288,-21232,
-    -21177,-21121,-21066,-21010,-20955,-20900,-20844,-20789,
-    -20734,-20678,-20623,-20568,-20513,-20457,-20402,-20347,
-    -20292,-20237,-20182,-20127,-20072,-20017,-19962,-19907,
-    -19852,-19797,-19742,-19688,-19633,-19578,-19523,-19469,
-    -19414,-19359,-19305,-19250,-19195,-19141,-19086,-19032,
-    -18977,-18923,-18868,-18814,-18760,-18705,-18651,-18597,
-    -18542,-18488,-18434,-18380,-18325,-18271,-18217,-18163,
-    -18109,-18055,-18001,-17946,-17892,-17838,-17784,-17731,
-    -17677,-17623,-17569,-17515,-17461,-17407,-17353,-17300,
-    -17246,-17192,-17138,-17085,-17031,-16977,-16924,-16870,
-    -16817,-16763,-16710,-16656,-16603,-16549,-16496,-16442,
-    -16389,-16335,-16282,-16229,-16175,-16122,-16069,-16015,
-    -15962,-15909,-15856,-15802,-15749,-15696,-15643,-15590,
-    -15537,-15484,-15431,-15378,-15325,-15272,-15219,-15166,
-    -15113,-15060,-15007,-14954,-14901,-14848,-14795,-14743,
-    -14690,-14637,-14584,-14531,-14479,-14426,-14373,-14321,
-    -14268,-14215,-14163,-14110,-14057,-14005,-13952,-13900,
-    -13847,-13795,-13742,-13690,-13637,-13585,-13533,-13480,
-    -13428,-13375,-13323,-13271,-13218,-13166,-13114,-13062,
-    -13009,-12957,-12905,-12853,-12800,-12748,-12696,-12644,
-    -12592,-12540,-12488,-12436,-12383,-12331,-12279,-12227,
-    -12175,-12123,-12071,-12019,-11967,-11916,-11864,-11812,
-    -11760,-11708,-11656,-11604,-11552,-11501,-11449,-11397,
-    -11345,-11293,-11242,-11190,-11138,-11086,-11035,-10983,
-    -10931,-10880,-10828,-10777,-10725,-10673,-10622,-10570,
-    -10519,-10467,-10415,-10364,-10312,-10261,-10209,-10158,
-    -10106,-10055,-10004,-9952,-9901,-9849,-9798,-9747,
-    -9695,-9644,-9592,-9541,-9490,-9438,-9387,-9336,
-    -9285,-9233,-9182,-9131,-9080,-9028,-8977,-8926,
-    -8875,-8824,-8772,-8721,-8670,-8619,-8568,-8517,
-    -8466,-8414,-8363,-8312,-8261,-8210,-8159,-8108,
-    -8057,-8006,-7955,-7904,-7853,-7802,-7751,-7700,
-    -7649,-7598,-7547,-7496,-7445,-7395,-7344,-7293,
-    -7242,-7191,-7140,-7089,-7038,-6988,-6937,-6886,
-    -6835,-6784,-6733,-6683,-6632,-6581,-6530,-6480,
-    -6429,-6378,-6327,-6277,-6226,-6175,-6124,-6074,
-    -6023,-5972,-5922,-5871,-5820,-5770,-5719,-5668,
-    -5618,-5567,-5517,-5466,-5415,-5365,-5314,-5264,
-    -5213,-5162,-5112,-5061,-5011,-4960,-4910,-4859,
-    -4808,-4758,-4707,-4657,-4606,-4556,-4505,-4455,
-    -4404,-4354,-4303,-4253,-4202,-4152,-4101,-4051,
-    -4001,-3950,-3900,-3849,-3799,-3748,-3698,-3648,
-    -3597,-3547,-3496,-3446,-3395,-3345,-3295,-3244,
-    -3194,-3144,-3093,-3043,-2992,-2942,-2892,-2841,
-    -2791,-2741,-2690,-2640,-2590,-2539,-2489,-2439,
-    -2388,-2338,-2288,-2237,-2187,-2137,-2086,-2036,
-    -1986,-1935,-1885,-1835,-1784,-1734,-1684,-1633,
-    -1583,-1533,-1483,-1432,-1382,-1332,-1281,-1231,
-    -1181,-1131,-1080,-1030,-980,-929,-879,-829,
-    -779,-728,-678,-628,-578,-527,-477,-427,
-    -376,-326,-276,-226,-175,-125,-75,-25,
-    25,75,125,175,226,276,326,376,
-    427,477,527,578,628,678,728,779,
-    829,879,929,980,1030,1080,1131,1181,
-    1231,1281,1332,1382,1432,1483,1533,1583,
-    1633,1684,1734,1784,1835,1885,1935,1986,
-    2036,2086,2137,2187,2237,2288,2338,2388,
-    2439,2489,2539,2590,2640,2690,2741,2791,
-    2841,2892,2942,2992,3043,3093,3144,3194,
-    3244,3295,3345,3395,3446,3496,3547,3597,
-    3648,3698,3748,3799,3849,3900,3950,4001,
-    4051,4101,4152,4202,4253,4303,4354,4404,
-    4455,4505,4556,4606,4657,4707,4758,4808,
-    4859,4910,4960,5011,5061,5112,5162,5213,
     5264,5314,5365,5415,5466,5517,5567,5618,
     5668,5719,5770,5820,5871,5922,5972,6023,
     6074,6124,6175,6226,6277,6327,6378,6429,
@@ -53100,6 +50746,12 @@ unsigned int Z_ZoneSize(void)
 
 
 // === VEX STUBS ===
+
+void I_SetPalette (byte* palette) {}
+void V_DrawPatchDirect(int x, int y, void* patch) {}
+void V_DrawPatch(int x, int y, void* patch) {}
+void Z_Init(void) {}
+
 void I_InitSound(boolean use_sfx_prefix) {}
 void I_ShutdownSound(void) {}
 int  I_GetSfxLumpNum(sfxinfo_t* s) { return -1; }
@@ -53216,13 +50868,26 @@ brain Brain;
 controller Controller;
 static const int DOOM_W=320,DOOM_H=200;
 static const int OFF_X=(480-DOOM_W)/2,OFF_Y=(272-DOOM_H)/2;
-void DG_Init(void){Brain.Screen.clearScreen(black);}
+void DG_Init(void){
+    Brain.Screen.clearScreen(black);
+    Brain.Timer.reset();
+}
 void DG_DrawFrame(void){
     Brain.Screen.drawImageFromBuffer((uint32_t*)DG_ScreenBuffer,OFF_X,OFF_Y,DOOM_W,DOOM_H);
     Brain.Screen.render();}
 void DG_SleepMs(unsigned int ms){wait(ms,msec);}
-unsigned int DG_GetTicksMs(void){return Brain.Timer.value()*1000;}
-int DG_GetKey(int* p,unsigned char* k){return 0;}
+unsigned int DG_GetTicksMs(void){ return Brain.Timer.value()*1000;}
+int DG_GetKey(int* pressed, unsigned char* key) {
+    if (Controller.ButtonA.pressing()) { *pressed = 1; *key = KEY_ENTER; return 1; }
+    if (Controller.ButtonB.pressing()) { *pressed = 1; *key = KEY_ESCAPE; return 1; }
+    if (Controller.ButtonUp.pressing()) { *pressed = 1; *key = KEY_UPARROW; return 1; }
+    if (Controller.ButtonDown.pressing()) { *pressed = 1; *key = KEY_DOWNARROW; return 1; }
+    if (Controller.ButtonLeft.pressing()) { *pressed = 1; *key = KEY_LEFTARROW; return 1; }
+    if (Controller.ButtonRight.pressing()) { *pressed = 1; *key = KEY_RIGHTARROW; return 1; }
+    if (Controller.ButtonL1.pressing()) { *pressed = 1; *key = KEY_STRAFE_L; return 1; }
+    if (Controller.ButtonR1.pressing()) { *pressed = 1; *key = KEY_FIRE; return 1; }
+    return 0;
+}    
 void DG_SetWindowTitle(const char*){}
 int main(){
     const char* argv[]={"doom","-iwad","/dev/usd/doom.wad",nullptr};
